@@ -1,7 +1,7 @@
 import {Router} from "express";
 import {validate} from "../middlewares/validator.middleware.js"
-import { registerUser, loginUser, logoutUser, verifyEmail, refreshAccessToken, forgotPasswordRequest, resetForgotPassword, getCurrentUser, changeCurrentPassword, resendEmailVerification, updateTheme } from "../controllers/auth.controllers.js";
-import { userRegisterValidator , userLoginValidator, userForgotPasswordValidator, userResetForgotPasswordValidator, userChangeCurrentPasswordValidator} from "../validators/index.js";
+import { registerUser, loginUser, logoutUser, verifyEmail, refreshAccessToken, forgotPasswordRequest, resetForgotPassword, getCurrentUser, changeCurrentPassword, resendEmailVerification, updateTheme, updateProfile } from "../controllers/auth.controllers.js";
+import { userRegisterValidator , userLoginValidator, userForgotPasswordValidator, userResetForgotPasswordValidator, userChangeCurrentPasswordValidator, userUpdateProfileValidator} from "../validators/index.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router=Router();
@@ -18,5 +18,6 @@ router.route("/current-user").post(verifyJWT, getCurrentUser);
 router.route("/change-password").post(verifyJWT, userChangeCurrentPasswordValidator(), validate, changeCurrentPassword);
 router.route("/update-theme").post(verifyJWT, updateTheme);
 router.route("/resend-email-verification").post(verifyJWT, resendEmailVerification)
+router.route("/update-profile").patch(verifyJWT, userUpdateProfileValidator(), validate, updateProfile);
 
 export default router;

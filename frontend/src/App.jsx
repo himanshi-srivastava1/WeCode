@@ -4,6 +4,7 @@ import Login from './components/auth/Login';
 import Signup from './components/auth/Signup';
 import AuthCallback from './components/auth/AuthCallback';
 import Dashboard from './components/Dashboard';
+import AllProjects from './components/AllProjects';
 import './App.css';
 
 function App() {
@@ -32,6 +33,10 @@ function App() {
         <Route 
           path="/dashboard" 
           element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/projects" 
+          element={isAuthenticated ? <AllProjects /> : <Navigate to="/login" />} 
         />
         <Route 
           path="/" 

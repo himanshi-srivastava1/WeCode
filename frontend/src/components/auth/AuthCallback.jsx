@@ -10,6 +10,7 @@ const AuthCallback = () => {
 
   useEffect(() => {
     const token = searchParams.get('token');
+    const refreshToken = searchParams.get('refreshToken');
     const userStr = searchParams.get('user');
 
     if (token && userStr) {
@@ -17,6 +18,9 @@ const AuthCallback = () => {
         const user = JSON.parse(decodeURIComponent(userStr));
 
         localStorage.setItem('accessToken', token);
+        if (refreshToken) {
+          localStorage.setItem('refreshToken', refreshToken);
+        }
         localStorage.setItem('user', JSON.stringify(user));
 
         setStatus('success');

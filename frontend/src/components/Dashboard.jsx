@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, Code, Users, Settings, Plus, FolderOpen, Server, Flame } from 'lucide-react';
+import { LogOut, Code, Users, Settings, Plus, FolderOpen, Server, Flame, Search, Star, Edit3, ArrowRight } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { fetchWithAuth } from '@/lib/api';
+import { Link } from 'react-router-dom';
 
 const ReactIcon = ({ className }) => (
   <svg className={className} viewBox="-11.5 -10.23174 23 20.46348" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
@@ -42,6 +44,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+const templatesData = [
+  { id: 'react', name: 'React', type: 'Frontend', description: 'A JavaScript library for building user interfaces with component-based architecture', tags: ['UI', 'Frontend', 'JavaScript'], rating: 5 },
+  { id: 'next.js', name: 'Next.js', type: 'Fullstack', description: 'The React framework for production with server-side rendering and static site generation', tags: ['React', 'SSR', 'Fullstack'], rating: 5 },
+  { id: 'express', name: 'Express', type: 'Backend', description: 'Fast, unopinionated, minimalist web framework for Node.js to build APIs and web applications', tags: ['Node.js', 'API', 'Backend'], rating: 4 },
+  { id: 'vue', name: 'Vue.js', type: 'Frontend', description: 'Progressive JavaScript framework for building user interfaces with an approachable learning curve', tags: ['UI', 'Frontend', 'JavaScript'], rating: 5 },
+  { id: 'hono', name: 'Hono', type: 'Backend', description: 'Fast, lightweight, built on Web Standards. Support for any JavaScript runtime.', tags: ['Node.js', 'TypeScript', 'Backend'], rating: 4 },
+  { id: 'angular', name: 'Angular', type: 'Fullstack', description: 'Angular is a web framework that empowers developers to build fast, reliable applications.', tags: ['Angular', 'Fullstack', 'TypeScript'], rating: 4 },
+];
+
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -49,6 +60,25 @@ const Dashboard = () => {
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [projectTitle, setProjectTitle] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
+  const [isEditDescModalOpen, setIsEditDescModalOpen] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState(null);
+  const [editingDescription, setEditingDescription] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState('All');
+  const [projects, setProjects] = useState([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editProfileForm, setEditProfileForm] = useState({ firstName: '', lastName: '', username: '' });
+  const [profileError, setProfileError] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const filteredTemplates = templatesData.filter(t => {
+    const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = filterType === 'All' || t.type === filterType;
+    return matchesSearch && matchesFilter;
+  });
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -57,8 +87,115 @@ const Dashboard = () => {
     }
   }, []);
 
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const res = await fetchWithAuth('http://localhost:3000/api/v1/project/get-all-projects');
+        const data = await res.json();
+        if (data.success) {
+          setProjects(data.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch projects", err);
+      } finally {
+        setIsLoadingProjects(false);
+      }
+    };
+
+    if (user) {
+      fetchProjects();
+    }
+  }, [user]);
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    setIsSavingProfile(true);
+    setProfileError('');
+
+    try {
+      const res = await fetchWithAuth('http://localhost:3000/api/v1/auth/update-profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editProfileForm)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUser(data.data.user);
+        localStorage.setItem('user', JSON.stringify(data.data.user));
+        setIsEditingProfile(false);
+      } else {
+        setProfileError(data.message || 'Failed to update profile');
+      }
+    } catch (err) {
+      setProfileError('Network error. Please try again.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleStarProject = async (e, projectId, isCurrentlyStarred) => {
+    e.stopPropagation();
+    
+    // Optimistic UI update
+    const updatedUser = { ...user };
+    if (!updatedUser.starredProjects) updatedUser.starredProjects = [];
+    
+    if (isCurrentlyStarred) {
+      updatedUser.starredProjects = updatedUser.starredProjects.filter(id => id !== projectId);
+    } else {
+      updatedUser.starredProjects = [...updatedUser.starredProjects, projectId];
+    }
+    setUser(updatedUser);
+
+    try {
+      const endpoint = isCurrentlyStarred ? 'unstar' : 'star';
+      const method = isCurrentlyStarred ? 'DELETE' : 'POST';
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectId}/${endpoint}`, {
+        method
+      });
+      const data = await res.json();
+      if (data.success) {
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      } else {
+        // Revert on error
+        setUser(user);
+      }
+    } catch (error) {
+      console.error("Failed to toggle star status", error);
+      setUser(user);
+    }
+  };
+
+  const handleUpdateDescription = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${editingProjectId}/description`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ description: editingDescription })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProjects(prev => prev.map(p => p._id === editingProjectId ? { ...p, description: editingDescription } : p));
+        setIsEditDescModalOpen(false);
+      } else {
+        alert(data.message || 'Failed to update description');
+      }
+    } catch (error) {
+      console.error('Error updating description', error);
+      alert('An error occurred');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     window.location.href = '/login';
   };
@@ -89,11 +226,23 @@ const Dashboard = () => {
             </div>
             <div className="flex items-center space-x-6">
               <ThemeToggle />
-              <div className="flex items-center space-x-3 bg-gray-100 dark:bg-white/5 px-3 py-1.5 rounded-full border border-gray-200 dark:border-white/10 transition-colors duration-300">
+              <div 
+                className="flex items-center space-x-3 bg-gray-100 dark:bg-white/5 px-3 py-1.5 rounded-full border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500/50 hover:bg-gray-200 dark:hover:bg-white/10 transition-all duration-300 cursor-pointer"
+                onClick={() => {
+                  setEditProfileForm({
+                    firstName: user.firstName || '',
+                    lastName: user.lastName || '',
+                    username: user.username || ''
+                  });
+                  setProfileError('');
+                  setIsEditingProfile(false);
+                  setIsProfileModalOpen(true);
+                }}
+              >
                 <Avatar className="h-8 w-8 border border-white/20 shadow-sm">
                   <AvatarImage src={user.avatar} alt={user.username} />
                   <AvatarFallback className="bg-blue-600 text-white font-medium">
-                    {user.username.charAt(0).toUpperCase()}
+                    {user.firstName ? user.firstName.charAt(0).toUpperCase() : user.username.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -198,28 +347,89 @@ const Dashboard = () => {
               Recent Projects
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-8 pb-12">
-            <div className="flex flex-col items-center justify-center text-center">
-              <div className="bg-gray-100 dark:bg-white/5 p-4 rounded-full mb-4 border border-gray-200 dark:border-white/10">
-                <Code className="h-10 w-10 text-gray-500" />
+          <CardContent className={projects.length > 0 ? "pt-6 pb-6" : "pt-8 pb-12"}>
+            {isLoadingProjects ? (
+              <div className="flex justify-center items-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
               </div>
-              <h3 className="text-lg font-medium text-gray-800 dark:text-gray-300 mb-1">No active projects</h3>
-              <p className="text-gray-600 dark:text-gray-500 max-w-sm">
-                You haven't created or joined any projects yet. Start a new project to get coding!
-              </p>
-              <Button
-                onClick={() => { setIsCreateModalOpen(true); setCreateStep(1); setSelectedTemplate(''); setProjectTitle(''); setProjectDescription(''); }}
-                className="mt-6 bg-blue-50 dark:bg-white/10 hover:bg-blue-100 dark:hover:bg-white/20 text-blue-600 dark:text-white border border-blue-200 dark:border-white/20 transition-all duration-300"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create First Project
-              </Button>
-            </div>
+            ) : projects.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {projects.slice(0, 8).map(project => (
+                  <div key={project._id} className="p-4 rounded-xl border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500/50 bg-gray-50 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition-all duration-300 cursor-pointer group shadow-sm flex flex-col h-[180px]">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 p-2.5 rounded-lg group-hover:scale-105 transition-transform shrink-0">
+                          <Code className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 title={project.title} className="font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
+                            {project.title}
+                          </h4>
+                          <span className="text-xs text-gray-500 capitalize block truncate">{project.template || 'react'}</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] bg-gray-200 dark:bg-white/10 px-2 py-1 rounded-md text-gray-600 dark:text-gray-300 font-medium shrink-0">
+                        {project.owner?.username || user?.username}
+                      </span>
+                    </div>
+                    
+                    <div className="mt-3 flex-1 overflow-hidden">
+                      <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                        {project.description || <span className="italic opacity-70 cursor-pointer hover:underline" onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setEditingProjectId(project._id); 
+                          setEditingDescription(''); 
+                          setIsEditDescModalOpen(true); 
+                        }}>Add description</span>}
+                      </p>
+                    </div>
+                    
+                    <div className="mt-auto pt-3 flex items-center justify-between border-t border-gray-200 dark:border-white/10 shrink-0">
+                      <span className="text-[10px] text-gray-500">{new Date(project.lastUpdatedAt || project.createdAt).toLocaleDateString()}</span>
+                      <div className="flex items-center gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-500/10"
+                          onClick={(e) => handleStarProject(e, project._id, user?.starredProjects?.includes(project._id))}
+                        >
+                          <Star className={`h-4 w-4 ${user?.starredProjects?.includes(project._id) ? 'fill-current' : ''}`} />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 px-2">Open</Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                </div>
+                <div className="mt-6 flex justify-end">
+                  <Link to="/projects" className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center transition-colors">
+                    View all projects <ArrowRight className="h-4 w-4 ml-1" />
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-center">
+                <div className="bg-gray-100 dark:bg-white/5 p-4 rounded-full mb-4 border border-gray-200 dark:border-white/10">
+                  <Code className="h-10 w-10 text-gray-500" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-800 dark:text-gray-300 mb-1">No active projects</h3>
+                <p className="text-gray-600 dark:text-gray-500 max-w-sm">
+                  You haven't created or joined any projects yet. Start a new project to get coding!
+                </p>
+                <Button
+                  onClick={() => { setIsCreateModalOpen(true); setCreateStep(1); setSelectedTemplate(''); setProjectTitle(''); setProjectDescription(''); }}
+                  className="mt-6 bg-blue-50 dark:bg-white/10 hover:bg-blue-100 dark:hover:bg-white/20 text-blue-600 dark:text-white border border-blue-200 dark:border-white/20 transition-all duration-300"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create First Project
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>
 
-      {/* Create Project Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
         <DialogContent className="sm:max-w-xl bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
           <DialogHeader>
@@ -230,32 +440,80 @@ const Dashboard = () => {
           </DialogHeader>
 
           {createStep === 1 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 py-6">
-              {['react', 'next.js', 'express', 'vue', 'hono', 'angular'].map((t) => {
-                let IconComponent = Code;
-                if (t === 'react') IconComponent = ReactIcon;
-                else if (t === 'next.js') IconComponent = NextjsIcon;
-                else if (t === 'express') IconComponent = Server;
-                else if (t === 'vue') IconComponent = VueIcon;
-                else if (t === 'hono') IconComponent = Flame;
-                else if (t === 'angular') IconComponent = AngularIcon;
+            <div className="py-4">
+              <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                  <Input
+                    placeholder="Search templates..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 bg-gray-50 dark:bg-[#1a2235] border-gray-200 dark:border-white/10 h-10"
+                  />
+                </div>
+                <div className="flex bg-gray-100 dark:bg-[#1a2235] p-1 rounded-lg border border-gray-200 dark:border-white/10 shrink-0 overflow-x-auto hide-scrollbar">
+                  {['All', 'Frontend', 'Backend', 'Fullstack'].map(type => (
+                    <button
+                      key={type}
+                      onClick={() => setFilterType(type)}
+                      className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${filterType === type
+                        ? 'bg-white dark:bg-[#2d3748] text-gray-900 dark:text-white shadow-sm border border-gray-200 dark:border-white/5'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                        }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                return (
-                  <div
-                    key={t}
-                    onClick={() => { setSelectedTemplate(t); setCreateStep(2); }}
-                    className={`p-5 rounded-2xl border cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-3 shadow-sm ${selectedTemplate === t
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 shadow-blue-500/20'
-                        : 'border-gray-200 dark:border-white/10 hover:border-blue-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/5 hover:-translate-y-1'
-                      }`}
-                  >
-                    <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 p-3 rounded-full">
-                      <IconComponent className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[50vh] overflow-y-auto pr-1 pb-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-white/10">
+                {filteredTemplates.map((t) => {
+                  let IconComponent = Code;
+                  if (t.id === 'react') IconComponent = ReactIcon;
+                  else if (t.id === 'next.js') IconComponent = NextjsIcon;
+                  else if (t.id === 'express') IconComponent = Server;
+                  else if (t.id === 'vue') IconComponent = VueIcon;
+                  else if (t.id === 'hono') IconComponent = Flame;
+                  else if (t.id === 'angular') IconComponent = AngularIcon;
+
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => { setSelectedTemplate(t.id); setCreateStep(2); }}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all duration-300 flex flex-col gap-3 group shadow-sm ${selectedTemplate === t.id
+                        ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-500/10 shadow-blue-500/10'
+                        : 'border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/5'
+                        }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-gray-100 dark:bg-white/5 p-2 rounded-full border border-gray-200 dark:border-white/10 group-hover:scale-105 transition-transform">
+                            <IconComponent className={`h-6 w-6 ${t.id === 'angular' ? 'text-red-500' : t.id === 'vue' ? 'text-green-500' : t.id === 'hono' ? 'text-orange-500' : 'text-blue-500'}`} />
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="font-bold text-gray-900 dark:text-white text-base">{t.name}</h4>
+                            <Code className="h-3 w-3 text-blue-500 opacity-80" />
+                          </div>
+                        </div>
+
+                      </div>
+
+                      <p className="text-[13px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-3">
+                        {t.description}
+                      </p>
+
+                      <div className="flex gap-1.5 mt-auto pt-1 flex-wrap">
+                        {t.tags.map(tag => (
+                          <span key={tag} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/5">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    <span className="font-semibold capitalize text-gray-800 dark:text-gray-200 text-sm">{t}</span>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           ) : (
             <div className="space-y-5 py-6">
@@ -266,16 +524,21 @@ const Dashboard = () => {
                   value={projectTitle}
                   onChange={(e) => setProjectTitle(e.target.value)}
                   placeholder="My Awesome Project"
+                  maxLength={100}
                   className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white h-11"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-sm font-medium text-gray-700 dark:text-gray-300">Description (Optional)</Label>
+                <div className="flex justify-between">
+                  <Label htmlFor="description" className="text-sm font-medium text-gray-700 dark:text-gray-300">Description (Optional)</Label>
+                  <span className="text-xs text-gray-500">{projectDescription.length}/1000</span>
+                </div>
                 <Input
                   id="description"
                   value={projectDescription}
                   onChange={(e) => setProjectDescription(e.target.value)}
                   placeholder="A brief description of what this does"
+                  maxLength={1000}
                   className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white h-11"
                 />
               </div>
@@ -291,17 +554,187 @@ const Dashboard = () => {
               <div />
             )}
             <Button
-              onClick={() => {
+              onClick={async () => {
                 if (createStep === 2) {
-                  console.log("Create project with:", selectedTemplate, projectTitle, projectDescription);
-                  // we will add functionality later
-                  setIsCreateModalOpen(false);
+                  setIsSubmitting(true);
+                  try {
+                    const res = await fetchWithAuth('http://localhost:3000/api/v1/project/create-project', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        title: projectTitle,
+                        description: projectDescription,
+                        template: selectedTemplate
+                      })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      setProjects(prev => [data.data, ...prev]);
+                      setIsCreateModalOpen(false);
+                    } else {
+                      alert(data.message || 'Failed to create project');
+                    }
+                  } catch (err) {
+                    console.error("Error creating project", err);
+                    alert('An error occurred while creating the project');
+                  } finally {
+                    setIsSubmitting(false);
+                  }
                 }
               }}
-              disabled={createStep === 2 && !projectTitle.trim()}
+              disabled={(createStep === 2 && !projectTitle.trim()) || isSubmitting}
               className={createStep === 1 ? "hidden" : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-lg shadow-blue-500/25 transition-all duration-300 h-10 px-6"}
             >
-              Finish & Create
+              {isSubmitting ? 'Creating...' : 'Finish & Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Profile Modal */}
+      <Dialog open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <DialogTitle className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-white dark:to-gray-400">
+              {isEditingProfile ? 'Edit Profile' : 'User Profile'}
+            </DialogTitle>
+            {!isEditingProfile && (
+              <Button variant="ghost" size="sm" onClick={() => setIsEditingProfile(true)} className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 mr-8">
+                <Edit3 className="h-4 w-4 mr-2" /> Edit
+              </Button>
+            )}
+          </DialogHeader>
+          <div className="flex flex-col items-center py-6">
+            <div className="relative mb-4">
+              <Avatar className="h-24 w-24 border-4 border-gray-50 dark:border-[#1a2235] shadow-xl">
+                <AvatarImage src={user.avatar} alt={user.username} />
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-3xl font-bold">
+                  {user.firstName ? user.firstName.charAt(0).toUpperCase() : user.username.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            
+            
+            {isEditingProfile ? (
+              <form onSubmit={handleUpdateProfile} className="w-full space-y-4 mb-6">
+                {profileError && (
+                  <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded-lg">
+                    {profileError}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-gray-500">First Name</label>
+                    <Input 
+                      value={editProfileForm.firstName} 
+                      onChange={e => setEditProfileForm({...editProfileForm, firstName: e.target.value})} 
+                      required 
+                      className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-gray-500">Last Name</label>
+                    <Input 
+                      value={editProfileForm.lastName} 
+                      onChange={e => setEditProfileForm({...editProfileForm, lastName: e.target.value})} 
+                      className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-500">Username</label>
+                  <Input 
+                    value={editProfileForm.username} 
+                    onChange={e => setEditProfileForm({...editProfileForm, username: e.target.value})} 
+                    required 
+                    maxLength={15}
+                    className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10"
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setIsEditingProfile(false)} className="flex-1 bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10">
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSavingProfile} className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
+                    {isSavingProfile ? 'Saving...' : 'Save'}
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                  {user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user.username}
+                </h3>
+                <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-white/5 px-3 py-1 rounded-full mb-6 border border-gray-200 dark:border-white/10">
+                  @{user.username.match(/([a-f0-9]{6})$/i) && user.username.length > 6 ? user.username.slice(0, -6) : user.username}
+                </span>
+              </>
+            )}
+
+            <div className="w-full grid grid-cols-2 gap-4">
+              <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10 flex flex-col items-center justify-center text-center">
+                <span className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+                  {projects.length}
+                </span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Total Projects<br/>Worked On</span>
+              </div>
+              
+              <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10 flex flex-col items-center justify-center text-center">
+                <span className="text-3xl font-bold text-yellow-500 dark:text-yellow-400 mb-1">
+                  {user.starredProjects?.length || 0}
+                </span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Starred<br/>Projects</span>
+              </div>
+
+              <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10 flex flex-col items-center justify-center text-center">
+                <span className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">
+                  {projects.filter(p => p.owner?._id === user._id || p.owner === user._id || p.owner?.username === user.username).length}
+                </span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Projects as<br/>Owner</span>
+              </div>
+
+              <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10 flex flex-col items-center justify-center text-center">
+                <span className="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">
+                  {projects.filter(p => p.collaborators?.includes(user._id) || (p.owner?._id !== user._id && p.owner !== user._id && p.owner?.username !== user.username)).length}
+                </span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Projects as<br/>Collaborator</span>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Description Modal */}
+      <Dialog open={isEditDescModalOpen} onOpenChange={setIsEditDescModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-white dark:to-gray-400">Add Description</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex justify-between mb-2">
+              <Label htmlFor="edit-desc" className="text-sm font-medium text-gray-700 dark:text-gray-300">Description</Label>
+              <span className="text-xs text-gray-500">{editingDescription.length}/1000</span>
+            </div>
+            <Input
+              id="edit-desc"
+              value={editingDescription}
+              onChange={(e) => setEditingDescription(e.target.value)}
+              placeholder="A brief description of what this project does"
+              maxLength={1000}
+              className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDescModalOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdateDescription}
+              disabled={isSubmitting || !editingDescription.trim()}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-sm"
+            >
+              {isSubmitting ? 'Saving...' : 'Save Description'}
             </Button>
           </DialogFooter>
         </DialogContent>

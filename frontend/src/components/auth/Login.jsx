@@ -37,6 +37,9 @@ const Login = () => {
       }
 
       localStorage.setItem('accessToken', data.data.accessToken);
+      if (data.data.refreshToken) {
+        localStorage.setItem('refreshToken', data.data.refreshToken);
+      }
       localStorage.setItem('user', JSON.stringify(data.data.user));
       window.location.href = '/dashboard';
     } catch (err) {

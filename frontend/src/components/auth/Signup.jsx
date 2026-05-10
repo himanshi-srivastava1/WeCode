@@ -10,6 +10,8 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 const Signup = () => {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,7 +25,7 @@ const Signup = () => {
       const response = await fetch('http://localhost:3000/api/v1/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, username, password }),
+        body: JSON.stringify({ email, username, password, firstName, lastName }),
       });
 
       let data;
@@ -120,15 +122,41 @@ const Signup = () => {
           </div>
 
           <form onSubmit={handleEmailSignup} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName" className="text-gray-700 dark:text-gray-200">First Name</Label>
+                <Input
+                  id="firstName"
+                  type="text"
+                  placeholder="John"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                  className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder:text-gray-500 focus-visible:ring-blue-500/50"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName" className="text-gray-700 dark:text-gray-200">Last Name</Label>
+                <Input
+                  id="lastName"
+                  type="text"
+                  placeholder="Doe"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder:text-gray-500 focus-visible:ring-blue-500/50"
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="username" className="text-gray-700 dark:text-gray-200">Username</Label>
               <Input
                 id="username"
                 type="text"
-                placeholder="Choose a username"
+                placeholder="Choose a username (max 15 chars)"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
+                maxLength={15}
                 className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder:text-gray-500 focus-visible:ring-blue-500/50"
               />
             </div>

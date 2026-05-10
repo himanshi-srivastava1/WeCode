@@ -11,6 +11,7 @@ const projectSchema = new Schema({
         type: String,
         required: true,
         trim: true,
+        maxlength: [100, "Project title cannot exceed 100 characters"],
         default: 'Untitled Project'
     },
     content: {
@@ -20,6 +21,7 @@ const projectSchema = new Schema({
     description: {
         type: String,
         trim: true,
+        maxlength: [1000, "Project description cannot exceed 1000 characters"],
         default: ''
     },
     template: {
@@ -40,11 +42,11 @@ const projectSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'User'
     }],
-    createdAt: {
+    lastUpdatedAt: {
         type: Date,
         default: Date.now
     },
-    lastModified: {
+    createdAt: {
         type: Date,
         default: Date.now
     }
@@ -52,9 +54,8 @@ const projectSchema = new Schema({
 
 
 
-projectSchema.pre('save', function (next) {
+projectSchema.pre('save', function () {
     this.lastModified = Date.now();
-    next();
 });
 
 export const Project = mongoose.model('Project', projectSchema);

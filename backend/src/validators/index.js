@@ -12,15 +12,19 @@ const userRegisterValidator = () => {
             .trim()
             .notEmpty()
             .withMessage("Username is required")
-            .isLength({ min: 3 })
-            .withMessage("Username must be at least 3 characters long")
+            .isLength({ min: 3, max: 15 })
+            .withMessage("Username must be between 3 and 15 characters")
             .isLowercase()
             .withMessage("Username must be in lowercase"),
         body("password")
             .trim()
             .notEmpty()
             .withMessage("Password is required"),
-        body("fullName")
+        body("firstName")
+            .trim()
+            .notEmpty()
+            .withMessage("First name is required"),
+        body("lastName")
             .optional()
             .trim()
     ];
@@ -59,10 +63,30 @@ const userResetForgotPasswordValidator = () => {
 
 const projectCreateValidator = () => {
     return [
-        body("title").notEmpty().withMessage("Project Title is required"),
-        body("description").optional().trim(),
+        body("title").notEmpty().withMessage("Project Title is required").isLength({ max: 100 }).withMessage("Project title cannot exceed 100 characters"),
+        body("description").optional().trim().isLength({ max: 1000 }).withMessage("Project description cannot exceed 1000 characters"),
         body("template").notEmpty().withMessage("Template is required"),
 
     ]
 }
-export { userRegisterValidator, userResetForgotPasswordValidator, userForgotPasswordValidator, userLoginValidator, userChangeCurrentPasswordValidator, projectCreateValidator };
+const userUpdateProfileValidator = () => {
+    return [
+        body("firstName")
+            .trim()
+            .notEmpty()
+            .withMessage("First name is required"),
+        body("lastName")
+            .optional()
+            .trim(),
+        body("username")
+            .trim()
+            .notEmpty()
+            .withMessage("Username is required")
+            .isLength({ min: 3, max: 15 })
+            .withMessage("Username must be between 3 and 15 characters")
+            .isLowercase()
+            .withMessage("Username must be in lowercase")
+    ];
+};
+
+export { userRegisterValidator, userUpdateProfileValidator, userResetForgotPasswordValidator, userForgotPasswordValidator, userLoginValidator, userChangeCurrentPasswordValidator, projectCreateValidator };

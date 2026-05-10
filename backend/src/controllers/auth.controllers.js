@@ -23,7 +23,7 @@ const generateAccessAndRefreshTokens = async (userId) => {
 };
 
 const registerUser = asyncHandler(async (req, res) => {
-    const { email, username, password, role } = req.body;
+    const { email, username, password, firstName, lastName } = req.body;
     const existedUser = await User.findOne({
         $or: [{ username, email }]
     });
@@ -36,6 +36,8 @@ const registerUser = asyncHandler(async (req, res) => {
         email,
         password,
         username,
+        firstName,
+        lastName,
         isEmailVerified: false,
     });
     const { unHashedToken, hashedToken, tokenExpiry } = user.generateTemporaryToken();
@@ -83,7 +85,7 @@ const loginUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid Password");
     }
     const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
-    const loggedInUser = await User.findBy(user._id)
+    const loggedInUser = await User.findById(user._id)
         .select(
             "-password -refreshToken -emailVerificationToken -emailVerificationExpiry"
         );
@@ -329,14 +331,44 @@ const updateTheme = asyncHandler(async (req, res) => {
         { $set: { preferredMode: theme } },
         { new: true }
     ).select("-password -refreshToken -emailVerificationToken -emailVerificationExpiry");
-    
+
     return res.status(200).json(
         new ApiResponse(200, { user }, "Theme updated successfully")
+    );
+});
+
+const updateProfile = asyncHandler(async (req, res) => {
+    const { firstName, lastName, username } = req.body;
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    if (username && username !== user.username) {
+        const existingUser = await User.findOne({ username });
+        if (existingUser) {
+            throw new ApiError(409, "Username is not available");
+        }
+        user.username = username;
+    }
+
+    if (firstName) user.firstName = firstName;
+    if (lastName !== undefined) user.lastName = lastName;
+
+    await user.save({ validateBeforeSave: false });
+
+    const updatedUser = await User.findById(user._id).select(
+        "-password -refreshToken -emailVerificationToken -emailVerificationExpiry"
+    );
+
+    return res.status(200).json(
+        new ApiResponse(200, { user: updatedUser }, "Profile updated successfully")
     );
 });
 
 export {
     registerUser, loginUser, logoutUser, verifyEmail, getCurrentUser,
     resendEmailVerification, refreshAccessToken, forgotPasswordRequest,
-    resetForgotPassword, changeCurrentPassword, updateTheme
+    resetForgotPassword, changeCurrentPassword, updateTheme, updateProfile
 };

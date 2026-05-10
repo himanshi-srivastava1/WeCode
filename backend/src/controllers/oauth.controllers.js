@@ -14,7 +14,7 @@ export const googleCallback = (req, res, next) => {
 
     user.refreshToken = refreshToken;
     user.save({ validateBeforeSave: false }).then(() => {
-      res.redirect(`http://localhost:5173/auth/success?token=${token}&user=${encodeURIComponent(JSON.stringify({
+      res.redirect(`http://localhost:5173/auth/success?token=${token}&refreshToken=${refreshToken}&user=${encodeURIComponent(JSON.stringify({
         id: user._id,
         username: user.username,
         email: user.email,
@@ -42,7 +42,7 @@ export const githubCallback = (req, res, next) => {
 
     user.refreshToken = refreshToken;
     user.save().then(() => {
-      res.redirect(`http://localhost:5173/auth/success?token=${token}&user=${encodeURIComponent(JSON.stringify({
+      res.redirect(`http://localhost:5173/auth/success?token=${token}&refreshToken=${refreshToken}&user=${encodeURIComponent(JSON.stringify({
         id: user._id,
         username: user.username,
         email: user.email,
