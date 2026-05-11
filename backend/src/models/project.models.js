@@ -14,9 +14,9 @@ const projectSchema = new Schema({
         maxlength: [100, "Project title cannot exceed 100 characters"],
         default: 'Untitled Project'
     },
-    content: {
-        type: String,
-        default: ''
+    fileTree: {
+        type: Schema.Types.Mixed,
+        default: {}
     },
     description: {
         type: String,

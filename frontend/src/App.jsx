@@ -5,14 +5,18 @@ import Signup from './components/auth/Signup';
 import AuthCallback from './components/auth/AuthCallback';
 import Dashboard from './components/Dashboard';
 import AllProjects from './components/AllProjects';
+import ProjectWorkspace from './components/ProjectWorkspace';
 import './App.css';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('accessToken'));
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    setIsAuthenticated(!!token);
+    const handleStorageChange = () => {
+      setIsAuthenticated(!!localStorage.getItem('accessToken'));
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   return (
@@ -37,6 +41,10 @@ function App() {
         <Route 
           path="/projects" 
           element={isAuthenticated ? <AllProjects /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/project/:projectId" 
+          element={isAuthenticated ? <ProjectWorkspace /> : <Navigate to="/login" />} 
         />
         <Route 
           path="/" 

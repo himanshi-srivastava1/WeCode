@@ -4,6 +4,7 @@ import { ApiError } from "../utils/api-error.js";
 import { asyncHandler } from "../utils/async-handler.js";
 import { Project } from "../models/project.models.js";
 import crypto from 'crypto';
+import { getTemplateFiles } from "../utils/templates.js";
 
 export const createProject = asyncHandler(async (req, res, next) => {
     const { title, description, template } = req.body;
@@ -21,6 +22,7 @@ export const createProject = asyncHandler(async (req, res, next) => {
         title,
         description,
         template,
+        fileTree: getTemplateFiles(template),
         owner: req.user._id,
         collaborators: [],
         starredBy: []
@@ -94,6 +96,45 @@ export const removeProjectFromStar = asyncHandler(async (req, res, next) => {
         .json(new ApiResponse(200, project, "Project removed from star successfully"));
 });
 
+export const deleteProject = asyncHandler(async (req, res, next) => {
+    const { projectId } = req.params;
+    const userId = req.user._id;
+
+    const project = await Project.findById(projectId);
+    if (!project) {
+        throw new ApiError(404, "Project not found");
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+    if (project.owner.toString() !== userId.toString()) {
+        throw new ApiError(403, "You do not have permission to delete this project");
+    }
+
+    if (project.collaborators.length > 0) {
+        await User.updateMany(
+            { _id: { $in: project.collaborators } },
+            { $pull: { collaboratedProjects: projectId } }
+        );
+    }
+
+
+    if (project.starredBy.length > 0) {
+        await User.updateMany(
+            { _id: { $in: project.starredBy } },
+            { $pull: { starredProjects: projectId } }
+        );
+    }
+
+    await Project.findByIdAndDelete(projectId);
+
+    user.ownedProjects = user.ownedProjects.filter(id => id.toString() !== projectId.toString());
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(200).json(new ApiResponse(200, {}, "Project deleted successfully"));
+});;
+
 export const updateProjectDescription = asyncHandler(async (req, res, next) => {
     const { projectId } = req.params;
     const { description } = req.body;
@@ -112,3 +153,84 @@ export const updateProjectDescription = asyncHandler(async (req, res, next) => {
 
     return res.status(200).json(new ApiResponse(200, project, "Project description updated successfully"));
 });
+
+export const updateProjectTitle = asyncHandler(async (req, res, next) => {
+    const { projectId } = req.params;
+    const { title } = req.body;
+
+    const project = await Project.findById(projectId);
+    if (!project) {
+        throw new ApiError(404, "Project not found");
+    }
+
+    if (project.owner.toString() !== req.user._id.toString() && !project.collaborators.includes(req.user._id)) {
+        throw new ApiError(403, "You do not have permission to edit this project");
+    }
+
+    project.title = title;
+    await project.save({ validateBeforeSave: false });
+
+    return res.status(200).json(new ApiResponse(200, project, "Project title updated successfully"));
+});
+
+export const duplicateProject = asyncHandler(async (req, res, next) => {
+    const { projectId } = req.params;
+    const userId = req.user._id;
+
+    const existingProject = await Project.findById(projectId);
+    if (!existingProject) {
+        throw new ApiError(404, "Project not found");
+    }
+
+    const newProjectId = crypto.randomUUID();
+    const duplicatedProject = await Project.create({
+        projectId: newProjectId,
+        title: `${existingProject.title} (Copy)`,
+        description: existingProject.description,
+        template: existingProject.template,
+        fileTree: existingProject.fileTree || getTemplateFiles(existingProject.template),
+        owner: userId,
+        collaborators: [],
+        starredBy: []
+    });
+
+    const user = await User.findById(userId);
+    user.ownedProjects.push(duplicatedProject._id);
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(201).json(new ApiResponse(201, duplicatedProject, "Project duplicated successfully"));
+});
+
+export const getProjectById = asyncHandler(async (req, res, next) => {
+    const { projectId } = req.params;
+    const project = await Project.findById(projectId).populate('owner', 'username avatar email');
+    
+    if (!project) {
+        throw new ApiError(404, "Project not found");
+    }
+
+    if (!project.fileTree || Object.keys(project.fileTree).length === 0) {
+        project.fileTree = getTemplateFiles(project.template);
+        project.markModified('fileTree');
+        await project.save({ validateBeforeSave: false });
+    }
+
+    return res.status(200).json(new ApiResponse(200, project, "Project fetched successfully"));
+});
+
+export const saveProjectFiles = asyncHandler(async (req, res, next) => {
+    const { projectId } = req.params;
+    const { fileTree } = req.body;
+
+    const project = await Project.findById(projectId);
+    if (!project) {
+        throw new ApiError(404, "Project not found");
+    }
+
+    project.fileTree = fileTree;
+    project.lastUpdatedAt = Date.now();
+    project.markModified('fileTree');
+    await project.save({ validateBeforeSave: false });
+
+    return res.status(200).json(new ApiResponse(200, {}, "Files saved successfully"));
+});

@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FolderOpen, Code, Star, ArrowLeft } from 'lucide-react';
+import { FolderOpen, Code, Star, ArrowLeft, MoreVertical, Copy, Trash2, Edit3 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { fetchWithAuth } from '@/lib/api';
 import { Link, useNavigate } from 'react-router-dom';
@@ -11,6 +14,15 @@ const AllProjects = () => {
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+  const [isEditTitleModalOpen, setIsEditTitleModalOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [editingProjectId, setEditingProjectId] = useState(null);
+  const [isEditDescModalOpen, setIsEditDescModalOpen] = useState(false);
+  const [editingDescription, setEditingDescription] = useState('');
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -70,6 +82,100 @@ const AllProjects = () => {
     } catch (error) {
       console.error("Failed to toggle star status", error);
       setUser(user);
+    }
+  };
+
+  const handleDuplicateProject = async (e, projectId) => {
+    e.stopPropagation();
+    setOpenDropdownId(null);
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectId}/duplicate`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProjects(prev => [data.data, ...prev]);
+      } else {
+        alert(data.message || 'Failed to duplicate project');
+      }
+    } catch (err) {
+      console.error("Error duplicating project", err);
+      alert('An error occurred');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectToDelete}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProjects(prev => prev.filter(p => p._id !== projectToDelete));
+        setIsDeleteDialogOpen(false);
+        setProjectToDelete(null);
+      } else {
+        alert(data.message || 'Failed to delete project');
+      }
+    } catch (err) {
+      console.error("Error deleting project", err);
+      alert('An error occurred');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateTitle = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${editingProjectId}/title`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: editingTitle })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProjects(prev => prev.map(p => p._id === editingProjectId ? { ...p, title: editingTitle } : p));
+        setIsEditTitleModalOpen(false);
+      } else {
+        alert(data.message || 'Failed to update title');
+      }
+    } catch (error) {
+      console.error('Error updating title', error);
+      alert('An error occurred');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateDescription = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${editingProjectId}/description`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ description: editingDescription })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProjects(prev => prev.map(p => p._id === editingProjectId ? { ...p, description: editingDescription } : p));
+        setIsEditDescModalOpen(false);
+      } else {
+        alert(data.message || 'Failed to update description');
+      }
+    } catch (error) {
+      console.error('Error updating description', error);
+      alert('An error occurred');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -155,7 +261,7 @@ const AllProjects = () => {
                             </span>
                           </td>
                           <td className="py-4 px-6 align-middle text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-2 relative">
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
@@ -164,9 +270,59 @@ const AllProjects = () => {
                               >
                                 <Star className={`h-4 w-4 ${isStarred ? 'fill-current' : ''}`} />
                               </Button>
-                              <Button variant="outline" size="sm" className="h-8 text-xs text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10 px-3">
+                              <Button variant="outline" size="sm" className="h-8 text-xs text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10 px-3" onClick={(e) => { e.stopPropagation(); navigate(`/project/${project._id}`); }}>
                                 Open
                               </Button>
+
+                              <div className="relative">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-white/10"
+                                  onClick={(e) => { e.stopPropagation(); setOpenDropdownId(openDropdownId === project._id ? null : project._id); }}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                                {openDropdownId === project._id && (
+                                  <>
+                                    <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); }} />
+                                    <div className="absolute right-0 bottom-full mb-1 w-44 bg-white dark:bg-[#1a2235] border border-gray-200 dark:border-white/10 rounded-lg shadow-xl z-20 overflow-hidden text-sm">
+                                      <button 
+                                        className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setEditingProjectId(project._id); setEditingTitle(project.title); setIsEditTitleModalOpen(true); }}
+                                      >
+                                        <Edit3 className="h-3.5 w-3.5" /> Edit Title
+                                      </button>
+                                      <button 
+                                        className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setEditingProjectId(project._id); setEditingDescription(project.description || ''); setIsEditDescModalOpen(true); }}
+                                      >
+                                        <Edit3 className="h-3.5 w-3.5" /> Edit Description
+                                      </button>
+                                      <button 
+                                        className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
+                                        onClick={(e) => handleDuplicateProject(e, project._id)}
+                                      >
+                                        <Copy className="h-3.5 w-3.5" /> Duplicate
+                                      </button>
+                                      <button 
+                                        className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); handleStarProject(e, project._id, user?.starredProjects?.includes(project._id)); }}
+                                      >
+                                        <Star className={`h-3.5 w-3.5 ${user?.starredProjects?.includes(project._id) ? 'fill-current text-yellow-500' : ''}`} /> 
+                                        {user?.starredProjects?.includes(project._id) ? 'Remove Star' : 'Add to Starred'}
+                                      </button>
+                                      <div className="h-px bg-gray-200 dark:bg-white/10 my-0.5" />
+                                      <button 
+                                        className="w-full text-left px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center gap-2 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setProjectToDelete(project._id); setIsDeleteDialogOpen(true); }}
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" /> Delete
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -192,6 +348,100 @@ const AllProjects = () => {
           </CardContent>
         </Card>
       </main>
+
+      {/* Edit Title Modal */}
+      <Dialog open={isEditTitleModalOpen} onOpenChange={setIsEditTitleModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-white dark:to-gray-400">Edit Title</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex justify-between mb-2">
+              <Label htmlFor="edit-title" className="text-sm font-medium text-gray-700 dark:text-gray-300">Title</Label>
+              <span className="text-xs text-gray-500">{editingTitle.length}/100</span>
+            </div>
+            <Input
+              id="edit-title"
+              value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              placeholder="Project Title"
+              maxLength={100}
+              className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditTitleModalOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdateTitle}
+              disabled={isSubmitting || !editingTitle.trim()}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-sm"
+            >
+              {isSubmitting ? 'Saving...' : 'Save Title'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Description Modal */}
+      <Dialog open={isEditDescModalOpen} onOpenChange={setIsEditDescModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-white dark:to-gray-400">Add Description</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex justify-between mb-2">
+              <Label htmlFor="edit-desc" className="text-sm font-medium text-gray-700 dark:text-gray-300">Description</Label>
+              <span className="text-xs text-gray-500">{editingDescription.length}/1000</span>
+            </div>
+            <Input
+              id="edit-desc"
+              value={editingDescription}
+              onChange={(e) => setEditingDescription(e.target.value)}
+              placeholder="A brief description of what this project does"
+              maxLength={1000}
+              className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDescModalOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdateDescription}
+              disabled={isSubmitting || !editingDescription.trim()}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-sm"
+            >
+              {isSubmitting ? 'Saving...' : 'Save Description'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-red-600 dark:text-red-400">Delete Project</DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              Are you sure you want to delete this project? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleDeleteProject}
+              disabled={isSubmitting}
+              className="bg-red-600 hover:bg-red-700 text-white border-0 shadow-sm"
+            >
+              {isSubmitting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

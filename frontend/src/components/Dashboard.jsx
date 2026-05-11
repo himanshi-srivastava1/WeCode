@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, Code, Users, Settings, Plus, FolderOpen, Server, Flame, Search, Star, Edit3, ArrowRight } from 'lucide-react';
+import { LogOut, Code, Users, Settings, Plus, FolderOpen, Server, Flame, Search, Star, Edit3, ArrowRight, MoreVertical, Copy, Trash2 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { fetchWithAuth } from '@/lib/api';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const ReactIcon = ({ className }) => (
   <svg className={className} viewBox="-11.5 -10.23174 23 20.46348" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
@@ -73,6 +73,12 @@ const Dashboard = () => {
   const [editProfileForm, setEditProfileForm] = useState({ firstName: '', lastName: '', username: '' });
   const [profileError, setProfileError] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+  const [isEditTitleModalOpen, setIsEditTitleModalOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState(null);
+  const navigate = useNavigate();
 
   const filteredTemplates = templatesData.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -137,11 +143,11 @@ const Dashboard = () => {
 
   const handleStarProject = async (e, projectId, isCurrentlyStarred) => {
     e.stopPropagation();
-    
+
     // Optimistic UI update
     const updatedUser = { ...user };
     if (!updatedUser.starredProjects) updatedUser.starredProjects = [];
-    
+
     if (isCurrentlyStarred) {
       updatedUser.starredProjects = updatedUser.starredProjects.filter(id => id !== projectId);
     } else {
@@ -193,6 +199,75 @@ const Dashboard = () => {
     }
   };
 
+  const handleDuplicateProject = async (e, projectId) => {
+    e.stopPropagation();
+    setOpenDropdownId(null);
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectId}/duplicate`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProjects(prev => [data.data, ...prev]);
+      } else {
+        alert(data.message || 'Failed to duplicate project');
+      }
+    } catch (err) {
+      console.error("Error duplicating project", err);
+      alert('An error occurred');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectToDelete}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProjects(prev => prev.filter(p => p._id !== projectToDelete));
+        setIsDeleteDialogOpen(false);
+        setProjectToDelete(null);
+      } else {
+        alert(data.message || 'Failed to delete project');
+      }
+    } catch (err) {
+      console.error("Error deleting project", err);
+      alert('An error occurred');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateTitle = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${editingProjectId}/title`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: editingTitle })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProjects(prev => prev.map(p => p._id === editingProjectId ? { ...p, title: editingTitle } : p));
+        setIsEditTitleModalOpen(false);
+      } else {
+        alert(data.message || 'Failed to update title');
+      }
+    } catch (error) {
+      console.error('Error updating title', error);
+      alert('An error occurred');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
@@ -226,7 +301,7 @@ const Dashboard = () => {
             </div>
             <div className="flex items-center space-x-6">
               <ThemeToggle />
-              <div 
+              <div
                 className="flex items-center space-x-3 bg-gray-100 dark:bg-white/5 px-3 py-1.5 rounded-full border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500/50 hover:bg-gray-200 dark:hover:bg-white/10 transition-all duration-300 cursor-pointer"
                 onClick={() => {
                   setEditProfileForm({
@@ -356,51 +431,101 @@ const Dashboard = () => {
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {projects.slice(0, 8).map(project => (
-                  <div key={project._id} className="p-4 rounded-xl border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500/50 bg-gray-50 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition-all duration-300 cursor-pointer group shadow-sm flex flex-col h-[180px]">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 p-2.5 rounded-lg group-hover:scale-105 transition-transform shrink-0">
-                          <Code className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <div key={project._id} className="p-4 rounded-xl border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500/50 bg-gray-50 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition-all duration-300 cursor-pointer group shadow-sm flex flex-col h-[180px]">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 p-2.5 rounded-lg group-hover:scale-105 transition-transform shrink-0">
+                            <Code className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 title={project.title} className="font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
+                              {project.title}
+                            </h4>
+                            <span className="text-xs text-gray-500 capitalize block truncate">{project.template || 'react'}</span>
+                          </div>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <h4 title={project.title} className="font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
-                            {project.title}
-                          </h4>
-                          <span className="text-xs text-gray-500 capitalize block truncate">{project.template || 'react'}</span>
+                        <span className="text-[10px] bg-gray-200 dark:bg-white/10 px-2 py-1 rounded-md text-gray-600 dark:text-gray-300 font-medium shrink-0">
+                          {project.owner?.username || user?.username}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 flex-1 overflow-hidden">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                          {project.description || <span className="italic opacity-70 cursor-pointer hover:underline" onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingProjectId(project._id);
+                            setEditingDescription('');
+                            setIsEditDescModalOpen(true);
+                          }}>Add description</span>}
+                        </p>
+                      </div>
+
+                      <div className="mt-auto pt-3 flex items-center justify-between border-t border-gray-200 dark:border-white/10 shrink-0">
+                        <span className="text-[10px] text-gray-500">{new Date(project.lastUpdatedAt || project.createdAt).toLocaleDateString()}</span>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-500/10"
+                            onClick={(e) => handleStarProject(e, project._id, user?.starredProjects?.includes(project._id))}
+                          >
+                            <Star className={`h-4 w-4 ${user?.starredProjects?.includes(project._id) ? 'fill-current' : ''}`} />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 px-2" onClick={(e) => { e.stopPropagation(); navigate(`/project/${project._id}`); }}>Open</Button>
+
+                          <div className="relative">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-white/10"
+                              onClick={(e) => { e.stopPropagation(); setOpenDropdownId(openDropdownId === project._id ? null : project._id); }}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                            {openDropdownId === project._id && (
+                              <>
+                                <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); }} />
+                                <div className="absolute right-0 bottom-full mb-1 w-44 bg-white dark:bg-[#1a2235] border border-gray-200 dark:border-white/10 rounded-lg shadow-xl z-20 overflow-hidden text-sm">
+                                  <button
+                                    className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setEditingProjectId(project._id); setEditingTitle(project.title); setIsEditTitleModalOpen(true); }}
+                                  >
+                                    <Edit3 className="h-3.5 w-3.5" /> Edit Title
+                                  </button>
+                                  <button
+                                    className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setEditingProjectId(project._id); setEditingDescription(project.description || ''); setIsEditDescModalOpen(true); }}
+                                  >
+                                    <Edit3 className="h-3.5 w-3.5" /> Edit Description
+                                  </button>
+                                  <button
+                                    className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
+                                    onClick={(e) => handleDuplicateProject(e, project._id)}
+                                  >
+                                    <Copy className="h-3.5 w-3.5" /> Duplicate
+                                  </button>
+                                  <button
+                                    className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); handleStarProject(e, project._id, user?.starredProjects?.includes(project._id)); }}
+                                  >
+                                    <Star className={`h-3.5 w-3.5 ${user?.starredProjects?.includes(project._id) ? 'fill-current text-yellow-500' : ''}`} />
+                                    {user?.starredProjects?.includes(project._id) ? 'Remove Star' : 'Add to Starred'}
+                                  </button>
+                                  <div className="h-px bg-gray-200 dark:bg-white/10 my-0.5" />
+                                  <button
+                                    className="w-full text-left px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center gap-2 transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setProjectToDelete(project._id); setIsDeleteDialogOpen(true); }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <span className="text-[10px] bg-gray-200 dark:bg-white/10 px-2 py-1 rounded-md text-gray-600 dark:text-gray-300 font-medium shrink-0">
-                        {project.owner?.username || user?.username}
-                      </span>
                     </div>
-                    
-                    <div className="mt-3 flex-1 overflow-hidden">
-                      <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                        {project.description || <span className="italic opacity-70 cursor-pointer hover:underline" onClick={(e) => { 
-                          e.stopPropagation(); 
-                          setEditingProjectId(project._id); 
-                          setEditingDescription(''); 
-                          setIsEditDescModalOpen(true); 
-                        }}>Add description</span>}
-                      </p>
-                    </div>
-                    
-                    <div className="mt-auto pt-3 flex items-center justify-between border-t border-gray-200 dark:border-white/10 shrink-0">
-                      <span className="text-[10px] text-gray-500">{new Date(project.lastUpdatedAt || project.createdAt).toLocaleDateString()}</span>
-                      <div className="flex items-center gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-7 w-7 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-500/10"
-                          onClick={(e) => handleStarProject(e, project._id, user?.starredProjects?.includes(project._id))}
-                        >
-                          <Star className={`h-4 w-4 ${user?.starredProjects?.includes(project._id) ? 'fill-current' : ''}`} />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 px-2">Open</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  ))}
                 </div>
                 <div className="mt-6 flex justify-end">
                   <Link to="/projects" className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center transition-colors">
@@ -614,8 +739,8 @@ const Dashboard = () => {
                 </AvatarFallback>
               </Avatar>
             </div>
-            
-            
+
+
             {isEditingProfile ? (
               <form onSubmit={handleUpdateProfile} className="w-full space-y-4 mb-6">
                 {profileError && (
@@ -626,28 +751,28 @@ const Dashboard = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-xs text-gray-500">First Name</label>
-                    <Input 
-                      value={editProfileForm.firstName} 
-                      onChange={e => setEditProfileForm({...editProfileForm, firstName: e.target.value})} 
-                      required 
+                    <Input
+                      value={editProfileForm.firstName}
+                      onChange={e => setEditProfileForm({ ...editProfileForm, firstName: e.target.value })}
+                      required
                       className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-500">Last Name</label>
-                    <Input 
-                      value={editProfileForm.lastName} 
-                      onChange={e => setEditProfileForm({...editProfileForm, lastName: e.target.value})} 
+                    <Input
+                      value={editProfileForm.lastName}
+                      onChange={e => setEditProfileForm({ ...editProfileForm, lastName: e.target.value })}
                       className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10"
                     />
                   </div>
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-gray-500">Username</label>
-                  <Input 
-                    value={editProfileForm.username} 
-                    onChange={e => setEditProfileForm({...editProfileForm, username: e.target.value})} 
-                    required 
+                  <Input
+                    value={editProfileForm.username}
+                    onChange={e => setEditProfileForm({ ...editProfileForm, username: e.target.value })}
+                    required
                     maxLength={15}
                     className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10"
                   />
@@ -677,28 +802,28 @@ const Dashboard = () => {
                 <span className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">
                   {projects.length}
                 </span>
-                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Total Projects<br/>Worked On</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Total Projects<br />Worked On</span>
               </div>
-              
+
               <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10 flex flex-col items-center justify-center text-center">
                 <span className="text-3xl font-bold text-yellow-500 dark:text-yellow-400 mb-1">
                   {user.starredProjects?.length || 0}
                 </span>
-                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Starred<br/>Projects</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Starred<br />Projects</span>
               </div>
 
               <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10 flex flex-col items-center justify-center text-center">
                 <span className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">
                   {projects.filter(p => p.owner?._id === user._id || p.owner === user._id || p.owner?.username === user.username).length}
                 </span>
-                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Projects as<br/>Owner</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Projects as<br />Owner</span>
               </div>
 
               <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10 flex flex-col items-center justify-center text-center">
                 <span className="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">
                   {projects.filter(p => p.collaborators?.includes(user._id) || (p.owner?._id !== user._id && p.owner !== user._id && p.owner?.username !== user.username)).length}
                 </span>
-                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Projects as<br/>Collaborator</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Projects as<br />Collaborator</span>
               </div>
             </div>
           </div>
@@ -729,12 +854,71 @@ const Dashboard = () => {
             <Button variant="outline" onClick={() => setIsEditDescModalOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleUpdateDescription}
               disabled={isSubmitting || !editingDescription.trim()}
               className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-sm"
             >
               {isSubmitting ? 'Saving...' : 'Save Description'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Title Modal */}
+      <Dialog open={isEditTitleModalOpen} onOpenChange={setIsEditTitleModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-white dark:to-gray-400">Edit Title</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex justify-between mb-2">
+              <Label htmlFor="edit-title" className="text-sm font-medium text-gray-700 dark:text-gray-300">Title</Label>
+              <span className="text-xs text-gray-500">{editingTitle.length}/100</span>
+            </div>
+            <Input
+              id="edit-title"
+              value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              placeholder="Project Title"
+              maxLength={100}
+              className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditTitleModalOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateTitle}
+              disabled={isSubmitting || !editingTitle.trim()}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-sm"
+            >
+              {isSubmitting ? 'Saving...' : 'Save Title'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-red-600 dark:text-red-400">Delete Project</DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              Are you sure you want to delete this project? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteProject}
+              disabled={isSubmitting}
+              className="bg-red-600 hover:bg-red-700 text-white border-0 shadow-sm"
+            >
+              {isSubmitting ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

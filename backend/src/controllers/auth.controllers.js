@@ -56,7 +56,7 @@ const registerUser = asyncHandler(async (req, res) => {
     const createdUser = await User.findById(user._id).select(
         "-password -refreshToken -emailVerificationToken -emailVerificationExpiry"
     );
-    if (!!createdUser) {
+    if (!createdUser) {
         throw new ApiError(
             500, "Something went wrong while registering a user."
         )
