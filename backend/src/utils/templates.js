@@ -10,7 +10,7 @@ const reactTemplate = {
         "type": "file",
         "content": `.App {\n  text-align: center;\n  font-family: sans-serif;\n}\n\n.App-header {\n  background-color: #282c34;\n  min-height: 100vh;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  font-size: calc(10px + 2vmin);\n  color: white;\n}\n\nbutton {\n  margin-top: 20px;\n  padding: 10px 20px;\n  font-size: 16px;\n  cursor: pointer;\n  background: #61dafb;\n  border: none;\n  border-radius: 4px;\n  color: #282c34;\n  font-weight: bold;\n}`
       },
-      "index.jsx": {
+      "main.jsx": {
         "type": "file",
         "content": `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App';\n\nconst root = ReactDOM.createRoot(document.getElementById('root'));\nroot.render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>\n);\n`
       }
@@ -18,11 +18,15 @@ const reactTemplate = {
   },
   "package.json": {
     "type": "file",
-    "content": `{\n  "name": "react-starter",\n  "version": "1.0.0",\n  "dependencies": {\n    "react": "^18.2.0",\n    "react-dom": "^18.2.0"\n  }\n}`
+    "content": `{\n  "name": "react-starter",\n  "version": "1.0.0",\n  "private": true,\n  "scripts": {\n    "dev": "vite",\n    "build": "vite build"\n  },\n  "dependencies": {\n    "react": "^18.2.0",\n    "react-dom": "^18.2.0"\n  },\n  "devDependencies": {\n    "vite": "^5.0.0",\n    "@vitejs/plugin-react": "^4.2.0"\n  }\n}`
   },
   "index.html": {
     "type": "file",
-    "content": `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="utf-8" />\n    <title>React App</title>\n  </head>\n  <body>\n    <noscript>You need to enable JavaScript to run this app.</noscript>\n    <div id="root"></div>\n  </body>\n</html>`
+    "content": `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="utf-8" />\n    <title>React App</title>\n  </head>\n  <body>\n    <noscript>You need to enable JavaScript to run this app.</noscript>\n    <div id="root"></div>\n    <script type="module" src="/src/main.jsx"></script>\n  </body>\n</html>`
+  },
+  "vite.config.js": {
+    "type": "file",
+    "content": `import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\n\nexport default defineConfig({\n  plugins: [react()],\n});\n`
   }
 };
 
@@ -57,7 +61,7 @@ const nextjsTemplate = {
   },
   "package.json": {
     "type": "file",
-    "content": `{\n  "name": "nextjs-starter",\n  "version": "1.0.0",\n  "dependencies": {\n    "next": "latest",\n    "react": "latest",\n    "react-dom": "latest"\n  }\n}`
+    "content": `{\n  "name": "nextjs-starter",\n  "version": "1.0.0",\n  "private": true,\n  "scripts": {\n    "dev": "next dev",\n    "build": "next build",\n    "start": "next start"\n  },\n  "dependencies": {\n    "next": "latest",\n    "react": "latest",\n    "react-dom": "latest"\n  }\n}`
   }
 };
 
@@ -73,7 +77,7 @@ const expressTemplate = {
   },
   "package.json": {
     "type": "file",
-    "content": `{\n  "name": "express-starter",\n  "version": "1.0.0",\n  "main": "src/index.js",\n  "scripts": {\n    "start": "node src/index.js"\n  },\n  "dependencies": {\n    "express": "^4.18.2"\n  }\n}`
+    "content": `{\n  "name": "express-starter",\n  "version": "1.0.0",\n  "main": "src/index.js",\n  "scripts": {\n    "start": "node src/index.js",\n    "dev": "node src/index.js"\n  },\n  "dependencies": {\n    "express": "^4.18.2"\n  }\n}`
   }
 };
 
@@ -93,11 +97,15 @@ const vueTemplate = {
   },
   "package.json": {
     "type": "file",
-    "content": `{\n  "name": "vue-starter",\n  "version": "1.0.0",\n  "dependencies": {\n    "vue": "^3.3.4"\n  }\n}`
+    "content": `{\n  "name": "vue-starter",\n  "version": "1.0.0",\n  "private": true,\n  "scripts": {\n    "dev": "vite",\n    "build": "vite build"\n  },\n  "dependencies": {\n    "vue": "^3.3.4"\n  },\n  "devDependencies": {\n    "vite": "^5.0.0",\n    "@vitejs/plugin-vue": "^4.5.0"\n  }\n}`
   },
   "index.html": {
     "type": "file",
     "content": `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="utf-8">\n    <title>Vue App</title>\n  </head>\n  <body>\n    <div id="app"></div>\n    <script type="module" src="/src/main.js"></script>\n  </body>\n</html>`
+  },
+  "vite.config.js": {
+    "type": "file",
+    "content": `import { defineConfig } from 'vite';\nimport vue from '@vitejs/plugin-vue';\n\nexport default defineConfig({\n  plugins: [vue()],\n});\n`
   }
 };
 
@@ -107,13 +115,13 @@ const honoTemplate = {
     "children": {
       "index.ts": {
         "type": "file",
-        "content": `import { Hono } from 'hono'\n\nconst app = new Hono()\n\napp.get('/', (c) => {\n  return c.text('Hello Hono!')\n})\n\nexport default app\n`
+        "content": `import { serve } from '@hono/node-server'\nimport { Hono } from 'hono'\n\nconst app = new Hono()\n\napp.get('/', (c) => {\n  return c.text('Hello Hono!')\n})\n\nserve({ fetch: app.fetch, port: 3000 }, (info) => {\n  console.log(\`Server is running on http://localhost:\${info.port}\`)\n})\n`
       }
     }
   },
   "package.json": {
     "type": "file",
-    "content": `{\n  "name": "hono-starter",\n  "dependencies": {\n    "hono": "^3.12.0"\n  }\n}`
+    "content": `{\n  "name": "hono-starter",\n  "version": "1.0.0",\n  "scripts": {\n    "dev": "tsx src/index.ts",\n    "start": "tsx src/index.ts"\n  },\n  "dependencies": {\n    "hono": "^3.12.0",\n    "@hono/node-server": "^1.3.0"\n  },\n  "devDependencies": {\n    "tsx": "^4.7.0"\n  }\n}`
   }
 };
 
@@ -138,7 +146,7 @@ const angularTemplate = {
   },
   "package.json": {
     "type": "file",
-    "content": `{\n  "name": "angular-starter",\n  "dependencies": {\n    "@angular/core": "^16.0.0"\n  }\n}`
+    "content": `{\n  "name": "angular-starter",\n  "version": "1.0.0",\n  "scripts": {\n    "start": "ng serve",\n    "dev": "ng serve"\n  },\n  "dependencies": {\n    "@angular/core": "^16.0.0"\n  }\n}`
   }
 };
 

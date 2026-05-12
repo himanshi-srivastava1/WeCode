@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useUser } from '@/contexts/UserContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FolderOpen, Code, Star, ArrowLeft, MoreVertical, Copy, Trash2, Edit3 } from 'lucide-react';
@@ -10,7 +11,7 @@ import { fetchWithAuth } from '@/lib/api';
 import { Link, useNavigate } from 'react-router-dom';
 
 const AllProjects = () => {
-  const [user, setUser] = useState(null);
+  const { user, setUser } = useUser();
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
@@ -24,14 +25,7 @@ const AllProjects = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
 
-  useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    } else {
-      navigate('/login');
-    }
-  }, [navigate]);
+
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -55,11 +49,11 @@ const AllProjects = () => {
 
   const handleStarProject = async (e, projectId, isCurrentlyStarred) => {
     e.stopPropagation();
-    
-    // Optimistic UI update
+
+    const previousUser = user;
     const updatedUser = { ...user };
     if (!updatedUser.starredProjects) updatedUser.starredProjects = [];
-    
+
     if (isCurrentlyStarred) {
       updatedUser.starredProjects = updatedUser.starredProjects.filter(id => id !== projectId);
     } else {
@@ -70,18 +64,14 @@ const AllProjects = () => {
     try {
       const endpoint = isCurrentlyStarred ? 'unstar' : 'star';
       const method = isCurrentlyStarred ? 'DELETE' : 'POST';
-      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectId}/${endpoint}`, {
-        method
-      });
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectId}/${endpoint}`, { method });
       const data = await res.json();
-      if (data.success) {
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-      } else {
-        setUser(user); // Revert on error
+      if (!data.success) {
+        setUser(previousUser);
       }
     } catch (error) {
       console.error("Failed to toggle star status", error);
-      setUser(user);
+      setUser(previousUser);
     }
   };
 
@@ -262,9 +252,9 @@ const AllProjects = () => {
                           </td>
                           <td className="py-4 px-6 align-middle text-right">
                             <div className="flex items-center justify-end gap-2 relative">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-500/10"
                                 onClick={(e) => handleStarProject(e, project._id, isStarred)}
                               >
@@ -275,9 +265,9 @@ const AllProjects = () => {
                               </Button>
 
                               <div className="relative">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
                                   className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-white/10"
                                   onClick={(e) => { e.stopPropagation(); setOpenDropdownId(openDropdownId === project._id ? null : project._id); }}
                                 >
@@ -287,33 +277,33 @@ const AllProjects = () => {
                                   <>
                                     <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); }} />
                                     <div className="absolute right-0 bottom-full mb-1 w-44 bg-white dark:bg-[#1a2235] border border-gray-200 dark:border-white/10 rounded-lg shadow-xl z-20 overflow-hidden text-sm">
-                                      <button 
+                                      <button
                                         className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
                                         onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setEditingProjectId(project._id); setEditingTitle(project.title); setIsEditTitleModalOpen(true); }}
                                       >
                                         <Edit3 className="h-3.5 w-3.5" /> Edit Title
                                       </button>
-                                      <button 
+                                      <button
                                         className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
                                         onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setEditingProjectId(project._id); setEditingDescription(project.description || ''); setIsEditDescModalOpen(true); }}
                                       >
                                         <Edit3 className="h-3.5 w-3.5" /> Edit Description
                                       </button>
-                                      <button 
+                                      <button
                                         className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
                                         onClick={(e) => handleDuplicateProject(e, project._id)}
                                       >
                                         <Copy className="h-3.5 w-3.5" /> Duplicate
                                       </button>
-                                      <button 
+                                      <button
                                         className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
                                         onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); handleStarProject(e, project._id, user?.starredProjects?.includes(project._id)); }}
                                       >
-                                        <Star className={`h-3.5 w-3.5 ${user?.starredProjects?.includes(project._id) ? 'fill-current text-yellow-500' : ''}`} /> 
+                                        <Star className={`h-3.5 w-3.5 ${user?.starredProjects?.includes(project._id) ? 'fill-current text-yellow-500' : ''}`} />
                                         {user?.starredProjects?.includes(project._id) ? 'Remove Star' : 'Add to Starred'}
                                       </button>
                                       <div className="h-px bg-gray-200 dark:bg-white/10 my-0.5" />
-                                      <button 
+                                      <button
                                         className="w-full text-left px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center gap-2 transition-colors"
                                         onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setProjectToDelete(project._id); setIsDeleteDialogOpen(true); }}
                                       >
@@ -373,7 +363,7 @@ const AllProjects = () => {
             <Button variant="outline" onClick={() => setIsEditTitleModalOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleUpdateTitle}
               disabled={isSubmitting || !editingTitle.trim()}
               className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-sm"
@@ -408,7 +398,7 @@ const AllProjects = () => {
             <Button variant="outline" onClick={() => setIsEditDescModalOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleUpdateDescription}
               disabled={isSubmitting || !editingDescription.trim()}
               className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-sm"
@@ -432,7 +422,7 @@ const AllProjects = () => {
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleDeleteProject}
               disabled={isSubmitting}
               className="bg-red-600 hover:bg-red-700 text-white border-0 shadow-sm"

@@ -49,6 +49,10 @@ const projectSchema = new Schema({
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    openedFiles:{
+        type: Array,
+        default: []
     }
 }, { timestamps: true });
 

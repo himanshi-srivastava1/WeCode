@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useUser } from '@/contexts/UserContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, Code, Users, Settings, Plus, FolderOpen, Server, Flame, Search, Star, Edit3, ArrowRight, MoreVertical, Copy, Trash2 } from 'lucide-react';
+import { LogOut, Code, Users, Settings, Plus, FolderOpen, Server, Flame, Search, Star, Edit3, ArrowRight, MoreVertical, Copy, Trash2, Camera, Loader2 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { fetchWithAuth } from '@/lib/api';
 import { Link, useNavigate } from 'react-router-dom';
+import Footer from '@/components/ui/Footer';
 
 const ReactIcon = ({ className }) => (
   <svg className={className} viewBox="-11.5 -10.23174 23 20.46348" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
@@ -54,7 +56,7 @@ const templatesData = [
 ];
 
 const Dashboard = () => {
-  const [user, setUser] = useState(null);
+  const { user, setUser } = useUser();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createStep, setCreateStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState('');
@@ -73,6 +75,10 @@ const Dashboard = () => {
   const [editProfileForm, setEditProfileForm] = useState({ firstName: '', lastName: '', username: '' });
   const [profileError, setProfileError] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const avatarInputRef = useRef(null);
   const [openDropdownId, setOpenDropdownId] = useState(null);
   const [isEditTitleModalOpen, setIsEditTitleModalOpen] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
@@ -86,12 +92,7 @@ const Dashboard = () => {
     return matchesSearch && matchesFilter;
   });
 
-  useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-  }, []);
+
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -111,7 +112,55 @@ const Dashboard = () => {
     if (user) {
       fetchProjects();
     }
-  }, [user]);
+  }, [user?._id]);
+
+  const handleAvatarFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('Only image files are allowed.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setAvatarError('Image must be less than 10MB.');
+      return;
+    }
+
+    setAvatarError('');
+    setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const handleUploadAvatar = async () => {
+    const file = avatarInputRef.current?.files?.[0];
+    if (!file) return;
+
+    setIsUploadingAvatar(true);
+    setAvatarError('');
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+      const res = await fetchWithAuth('http://localhost:3000/api/v1/profile/update-avatar', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setUser({ ...user, avatar: data.data.avatar });
+        setAvatarPreview(null);
+        if (avatarInputRef.current) avatarInputRef.current.value = '';
+      } else {
+        setAvatarError(data.message || 'Failed to upload picture.');
+      }
+    } catch (err) {
+      setAvatarError('Network error. Please try again.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -129,7 +178,6 @@ const Dashboard = () => {
       const data = await res.json();
       if (data.success) {
         setUser(data.data.user);
-        localStorage.setItem('user', JSON.stringify(data.data.user));
         setIsEditingProfile(false);
       } else {
         setProfileError(data.message || 'Failed to update profile');
@@ -145,6 +193,7 @@ const Dashboard = () => {
     e.stopPropagation();
 
     // Optimistic UI update
+    const previousUser = user;
     const updatedUser = { ...user };
     if (!updatedUser.starredProjects) updatedUser.starredProjects = [];
 
@@ -162,15 +211,12 @@ const Dashboard = () => {
         method
       });
       const data = await res.json();
-      if (data.success) {
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-      } else {
-        // Revert on error
-        setUser(user);
+      if (!data.success) {
+        setUser(previousUser);
       }
     } catch (error) {
       console.error("Failed to toggle star status", error);
-      setUser(user);
+      setUser(previousUser);
     }
   };
 
@@ -731,14 +777,74 @@ const Dashboard = () => {
             )}
           </DialogHeader>
           <div className="flex flex-col items-center py-6">
-            <div className="relative mb-4">
+            <div className="relative mb-4 group">
               <Avatar className="h-24 w-24 border-4 border-gray-50 dark:border-[#1a2235] shadow-xl">
-                <AvatarImage src={user.avatar} alt={user.username} />
+                <AvatarImage src={avatarPreview || user.avatar} alt={user.username} />
                 <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-3xl font-bold">
                   {user.firstName ? user.firstName.charAt(0).toUpperCase() : user.username.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
+
+              {isEditingProfile && (
+                <>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarFileChange}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                    title="Change profile picture"
+                  >
+                    <Camera className="h-6 w-6 text-white" />
+                  </button>
+                </>
+              )}
             </div>
+
+            {/* Avatar upload controls – only visible in edit mode after picking a file */}
+            {isEditingProfile && avatarPreview && (
+              <div className="flex flex-col items-center gap-2 mb-3 w-full">
+                {avatarError && (
+                  <p className="text-xs text-red-500 dark:text-red-400">{avatarError}</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setAvatarPreview(null); if (avatarInputRef.current) avatarInputRef.current.value = ''; setAvatarError(''); }}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUploadAvatar}
+                    disabled={isUploadingAvatar}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-500 hover:to-purple-500 transition-all disabled:opacity-60 flex items-center gap-1.5"
+                  >
+                    {isUploadingAvatar ? (
+                      <><Loader2 className="h-3 w-3 animate-spin" /> Uploading...</>
+                    ) : (
+                      <><Camera className="h-3 w-3" /> Save Photo</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Non-edit-mode avatar error */}
+            {isEditingProfile && !avatarPreview && avatarError && (
+              <p className="text-xs text-red-500 dark:text-red-400 mb-2">{avatarError}</p>
+            )}
+
+            {/* Hint text when in edit mode but no preview yet */}
+            {isEditingProfile && !avatarPreview && !avatarError && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Hover avatar to change photo</p>
+            )}
 
 
             {isEditingProfile ? (
@@ -778,7 +884,17 @@ const Dashboard = () => {
                   />
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={() => setIsEditingProfile(false)} className="flex-1 bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsEditingProfile(false);
+                      setAvatarPreview(null);
+                      setAvatarError('');
+                      if (avatarInputRef.current) avatarInputRef.current.value = '';
+                    }}
+                    className="flex-1 bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10"
+                  >
                     Cancel
                   </Button>
                   <Button type="submit" disabled={isSavingProfile} className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
@@ -923,6 +1039,7 @@ const Dashboard = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Footer />
     </div>
   );
 };

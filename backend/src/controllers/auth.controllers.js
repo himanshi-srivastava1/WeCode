@@ -3,6 +3,8 @@ import { ApiResponse } from "../utils/api-response.js";
 import { ApiError } from "../utils/api-error.js";
 import { asyncHandler } from "../utils/async-handler.js";
 import { sendEmail, emailVerificationMailgenContent, forgotPasswordMailgenContent } from "../utils/mail.js";
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 
 
@@ -355,6 +357,14 @@ const updateProfile = asyncHandler(async (req, res) => {
 
     if (firstName) user.firstName = firstName;
     if (lastName !== undefined) user.lastName = lastName;
+
+    if (req.file) {
+        const avatarLocalPath = req.file.path;
+        const avatarUrl = await uploadOnCloudinary(avatarLocalPath);
+        if (avatarUrl && avatarUrl.url) {
+            user.avatar = avatarUrl.url;
+        }
+    }
 
     await user.save({ validateBeforeSave: false });
 

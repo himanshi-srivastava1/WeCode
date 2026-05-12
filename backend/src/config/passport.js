@@ -72,11 +72,17 @@ passport.use(new GitHubStrategy({
         }
         
         // Create new user
+        const displayName = profile.displayName || profile.username || '';
+        const nameParts = displayName.split(' ');
+        const firstName = nameParts[0] || 'User';
+        const lastName = nameParts.slice(1).join(' ');
+
         user = new User({
           githubId: profile.id,
           username: (profile.username ? profile.username.toLowerCase() : profile.emails[0].value.split('@')[0]) + crypto.randomBytes(3).toString('hex'),
           email: profile.emails[0].value,
-          fullName: profile.displayName || profile.username,
+          firstName: firstName,
+          lastName: lastName,
           avatar: profile.photos[0].value,
           isEmailVerified: true
         });

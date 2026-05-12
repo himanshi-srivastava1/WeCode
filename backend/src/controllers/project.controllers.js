@@ -233,4 +233,24 @@ export const saveProjectFiles = asyncHandler(async (req, res, next) => {
     await project.save({ validateBeforeSave: false });
 
     return res.status(200).json(new ApiResponse(200, {}, "Files saved successfully"));
-});
+});
+
+export const updateOpenedFilesOfProject= asyncHandler(async (req, res, next)=>{
+    const { projectId } = req.params;
+    const { openedFiles } = req.body;
+
+    if (!Array.isArray(openedFiles)) {
+        throw new ApiError(400, "openedFiles must be an array");
+    }
+    
+    const project = await Project.findById(projectId);
+    if (!project) {
+        throw new ApiError(404, "Project not found");
+    }
+    
+    project.openedFiles = openedFiles;
+    project.markModified('openedFiles');
+    await project.save({ validateBeforeSave: false });
+    
+    return res.status(200).json(new ApiResponse(200, project, "Opened files updated successfully"));
+});
