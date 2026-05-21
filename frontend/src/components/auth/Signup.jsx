@@ -22,7 +22,7 @@ const Signup = () => {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3000/api/v1/auth/register', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, username, password, firstName, lastName }),
@@ -53,11 +53,11 @@ const Signup = () => {
   };
 
   const handleGoogleSignup = () => {
-    window.location.href = 'http://localhost:3000/api/v1/oauth/google';
+    window.location.href = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/oauth/google`;
   };
 
   const handleGitHubSignup = () => {
-    window.location.href = 'http://localhost:3000/api/v1/oauth/github';
+    window.location.href = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/oauth/github`;
   };
 
   return (

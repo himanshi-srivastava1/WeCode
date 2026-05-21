@@ -314,7 +314,7 @@ const ProjectWorkspace = () => {
 
     if (accepted) {
       try {
-        await fetchWithAuth(`http://localhost:3000/api/v1/projects/${projectId}/collaborators`, {
+        await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/projects/${projectId}/collaborators`, {
           method: 'POST',
           body: JSON.stringify({ userId: joinRequest.user._id })
         });
@@ -387,7 +387,7 @@ const ProjectWorkspace = () => {
   useEffect(() => {
     const fetchProject = async () => {
       try {
-        const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectId}`);
+        const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/project/${projectId}`);
         const data = await res.json();
         if (data.success) {
           setHasUnsavedChanges(false);
@@ -442,7 +442,7 @@ const ProjectWorkspace = () => {
     socket.emit('opened-files-updated', filesArray);
 
     try {
-      const response = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectId}/opened-files`, {
+      const response = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/project/${projectId}/opened-files`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -709,7 +709,7 @@ const ProjectWorkspace = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectId}/files`, {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/project/${projectId}/files`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileTree })

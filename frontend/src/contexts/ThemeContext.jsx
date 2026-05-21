@@ -38,7 +38,7 @@ export const ThemeProvider = ({ children }) => {
     const token = localStorage.getItem("accessToken");
     if (token) {
       try {
-        await fetch("http://localhost:3000/api/v1/auth/update-theme", {
+        await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/auth/update-theme`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

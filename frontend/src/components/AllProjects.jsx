@@ -30,7 +30,7 @@ const AllProjects = () => {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const res = await fetchWithAuth('http://localhost:3000/api/v1/project/get-all-projects');
+        const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/project/get-all-projects`);
         const data = await res.json();
         if (data.success) {
           setProjects(data.data);
@@ -64,7 +64,7 @@ const AllProjects = () => {
     try {
       const endpoint = isCurrentlyStarred ? 'unstar' : 'star';
       const method = isCurrentlyStarred ? 'DELETE' : 'POST';
-      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectId}/${endpoint}`, { method });
+      const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/project/${projectId}/${endpoint}`, { method });
       const data = await res.json();
       if (!data.success) {
         setUser(previousUser);
@@ -80,7 +80,7 @@ const AllProjects = () => {
     setOpenDropdownId(null);
     setIsSubmitting(true);
     try {
-      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectId}/duplicate`, {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/project/${projectId}/duplicate`, {
         method: 'POST'
       });
       const data = await res.json();
@@ -100,7 +100,7 @@ const AllProjects = () => {
   const handleDeleteProject = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectToDelete}`, {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/project/${projectToDelete}`, {
         method: 'DELETE'
       });
       const data = await res.json();
@@ -122,7 +122,7 @@ const AllProjects = () => {
   const handleUpdateTitle = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${editingProjectId}/title`, {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/project/${editingProjectId}/title`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -147,7 +147,7 @@ const AllProjects = () => {
   const handleUpdateDescription = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetchWithAuth(`http://localhost:3000/api/v1/project/${editingProjectId}/description`, {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/project/${editingProjectId}/description`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

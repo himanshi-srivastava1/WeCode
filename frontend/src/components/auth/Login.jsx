@@ -19,7 +19,7 @@ const Login = () => {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3000/api/v1/auth/login', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -54,11 +54,11 @@ const Login = () => {
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:3000/api/v1/oauth/google';
+    window.location.href = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/oauth/google`;
   };
 
   const handleGitHubLogin = () => {
-    window.location.href = 'http://localhost:3000/api/v1/oauth/github';
+    window.location.href = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/oauth/github`;
   };
 
   return (
