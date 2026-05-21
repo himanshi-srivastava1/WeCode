@@ -6,13 +6,17 @@ import { getWebContainer } from '@/lib/webcontainer.js';
 import Editor from '@monaco-editor/react';
 import {
   Folder, FolderOpen, File as FileIcon, ChevronRight, ChevronDown,
-  Save, ArrowLeft, Code, Play, X,
-  Settings
+  Save, ArrowLeft, Code, Play, X, Copy, MessageSquare, Send, Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useTheme } from "@/contexts/ThemeContext";
 import { fetchWithAuth } from '@/lib/api';
+import { socket } from '@/socket.js';
+import { useUser } from '@/contexts/UserContext';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+import { MonacoBinding } from 'y-monaco';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -139,6 +143,7 @@ const transformTree = (node) => {
 const ProjectWorkspace = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const { user } = useUser();
   const [project, setProject] = useState(null);
   const [fileTree, setFileTree] = useState({});
   const [activeFilePath, setActiveFilePath] = useState(null);
@@ -156,9 +161,176 @@ const ProjectWorkspace = () => {
   const [renamePath, setRenamePath] = useState('');
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [renameNewName, setRenameNewName] = useState('');
+  const [joinRequest, setJoinRequest] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [awarenessStates, setAwarenessStates] = useState(new Map());
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const chatEndRef = useRef(null);
   const serverReadyRegistered = useRef(false);
   const terminalRef = useRef(null);
   const { theme: appTheme } = useTheme();
+
+  // Yjs Refs
+  const yDocRef = useRef(null);
+  const providerRef = useRef(null);
+  const bindingRef = useRef(null);
+  const monacoEditorRef = useRef(null);
+
+  useEffect(() => {
+    if (!projectId || !user) return;
+
+    socket.connect();
+    socket.emit('join-workspace-room', {
+      projectId,
+      user: { _id: user._id, username: user.username, avatar: user.avatar }
+    });
+
+    const handleJoinRequest = (data) => {
+      setJoinRequest(data);
+    };
+
+    const handleOnlineUsersUpdated = (users) => {
+      setOnlineUsers(users);
+    };
+
+    const handleFileTreeUpdated = (newTree) => {
+      setFileTree(newTree);
+    };
+
+    const handleOpenedFilesUpdated = (files) => {
+      setOpenedFiles(files);
+      setActiveFilePath(currentActive => {
+        if (currentActive && !files.includes(currentActive)) {
+          return files.length > 0 ? files[files.length - 1] : null;
+        }
+        return currentActive;
+      });
+    };
+
+    const handleNewChatMessage = (msg) => {
+      setChatMessages(prev => [...prev, msg]);
+    };
+
+    socket.on('join-request', handleJoinRequest);
+    socket.on('online-users-updated', handleOnlineUsersUpdated);
+    socket.on('file-tree-updated', handleFileTreeUpdated);
+    socket.on('opened-files-updated', handleOpenedFilesUpdated);
+    socket.on('new-chat-message', handleNewChatMessage);
+
+    return () => {
+      socket.emit('leave-workspace-room', { projectId, userId: user._id });
+      socket.off('join-request', handleJoinRequest);
+      socket.off('online-users-updated', handleOnlineUsersUpdated);
+      socket.off('file-tree-updated', handleFileTreeUpdated);
+      socket.off('opened-files-updated', handleOpenedFilesUpdated);
+      socket.off('new-chat-message', handleNewChatMessage);
+    };
+  }, [projectId, user]);
+
+  // Yjs Setup
+  useEffect(() => {
+    if (!projectId || !user) return;
+    
+    const yDoc = new Y.Doc();
+    yDocRef.current = yDoc;
+
+    const wsUrl = process.env.NODE_ENV === 'production' 
+       ? window.location.origin.replace(/^http/, 'ws') 
+       : 'ws://localhost:3000';
+       
+    const provider = new WebsocketProvider(`${wsUrl}/yjs/${projectId}`, 'project-room', yDoc);
+    providerRef.current = provider;
+
+    // Set awareness (cursor color and name)
+    const color = '#' + Math.floor(Math.random()*16777215).toString(16);
+    provider.awareness.setLocalStateField('user', {
+      name: user.username || 'Anonymous',
+      color: color,
+    });
+
+    const handleAwarenessChange = () => {
+      setAwarenessStates(new Map(provider.awareness.getStates()));
+    };
+
+    provider.awareness.on('change', handleAwarenessChange);
+    // Initial state
+    handleAwarenessChange();
+
+    return () => {
+      provider.awareness.off('change', handleAwarenessChange);
+      provider.disconnect();
+      yDoc.destroy();
+    };
+  }, [projectId, user]);
+
+  const bindEditor = (filePath, editor) => {
+    if (!yDocRef.current || !providerRef.current || !editor || !filePath) return;
+
+    if (bindingRef.current) {
+      bindingRef.current.destroy();
+      bindingRef.current = null;
+    }
+
+    const type = yDocRef.current.getText(filePath);
+    
+    // Initialize if empty but fileTree has content
+    if (type.toString() === '') {
+       const parts = filePath.split('/');
+       let current = { children: fileTree };
+       for (const part of parts) {
+           if (current.children) current = current.children[part];
+       }
+       if (current && current.content) {
+           type.insert(0, current.content);
+       }
+    }
+
+    bindingRef.current = new MonacoBinding(
+      type,
+      editor.getModel(),
+      new Set([editor]),
+      providerRef.current.awareness
+    );
+  };
+
+  const handleEditorDidMount = (editor, monaco) => {
+    monacoEditorRef.current = editor;
+    if (activeFilePath) {
+      bindEditor(activeFilePath, editor);
+    }
+  };
+
+  useEffect(() => {
+    if (monacoEditorRef.current && activeFilePath) {
+      bindEditor(activeFilePath, monacoEditorRef.current);
+    }
+  }, [activeFilePath]);
+
+  const handleJoinResponse = async (accepted) => {
+    if (!joinRequest) return;
+
+    if (accepted) {
+      try {
+        await fetchWithAuth(`http://localhost:3000/api/v1/projects/${projectId}/collaborators`, {
+          method: 'POST',
+          body: JSON.stringify({ userId: joinRequest.user._id })
+        });
+      } catch (error) {
+        console.error("Error adding collaborator via API:", error);
+      }
+    }
+
+    socket.emit('join-response', {
+      accepted,
+      projectId,
+      joinerId: joinRequest.user._id,
+      joinerSocketId: joinRequest.socketId
+    });
+    setJoinRequest(null);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -186,9 +358,8 @@ const ProjectWorkspace = () => {
     syncFilesystem();
 
     return () => { isMounted = false; };
-  }, [isLoading, !!fileTree]); // !!fileTree converts the object presence to a boolean
+  }, [isLoading, !!fileTree]);
 
-  // Register the server-ready listener ONCE on the WebContainer
   useEffect(() => {
     let isMounted = true;
 
@@ -260,7 +431,16 @@ const ProjectWorkspace = () => {
     }
   }, [activeFilePath]);
 
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, isChatOpen]);
+
   const syncOpenedFiles = async (projectId, filesArray) => {
+    // Emit through socket for real-time sync
+    socket.emit('opened-files-updated', filesArray);
+
     try {
       const response = await fetchWithAuth(`http://localhost:3000/api/v1/project/${projectId}/opened-files`, {
         method: 'PUT',
@@ -425,6 +605,9 @@ const ProjectWorkspace = () => {
 
       setIsCreateModalOpen(false);
       setNewItemName('');
+      
+      // Sync with others
+      socket.emit('file-tree-updated', newTree);
     } catch (error) {
       console.error('Failed to create node in WebContainer', error);
       alert('Error creating a file in the  virtual file system.');
@@ -487,6 +670,9 @@ const ProjectWorkspace = () => {
     setIsRenameModalOpen(false);
     setRenamePath('');
     setRenameNewName('');
+    
+    // Sync with others
+    socket.emit('file-tree-updated', newTree);
   };
 
   const handleDeleteNode = (path) => {
@@ -514,6 +700,9 @@ const ProjectWorkspace = () => {
       if (selectedNodePath && selectedNodePath.startsWith(path)) {
         setSelectedNodePath('');
       }
+      
+      // Sync with others
+      socket.emit('file-tree-updated', newTree);
     }
   };
 
@@ -704,7 +893,7 @@ const ProjectWorkspace = () => {
 
   const activeFileNode = activeFilePath ? getFileNode(fileTree, activeFilePath) : null;
 
-  let language = "javascript"; // Default
+  let language = "javascript";
 
   if (activeFilePath) {
     const fileName = activeFilePath.toLowerCase();
@@ -725,8 +914,57 @@ const ProjectWorkspace = () => {
     else if (fileName.endsWith('.mjs')) language = "javascript";
   }
 
+  const getUserColor = (username) => {
+    for (const [_, state] of awarenessStates.entries()) {
+      if (state.user && state.user.name === username) {
+        return state.user.color;
+      }
+    }
+    return null;
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-gray-100 overflow-hidden transition-colors duration-300">
+      <style>
+        {Array.from(awarenessStates.entries()).map(([clientId, state]) => {
+          if (state.user && state.user.color) {
+            return `
+              .yRemoteSelection-${clientId} {
+                background-color: ${state.user.color}40 !important;
+              }
+              .yRemoteSelectionHead-${clientId} {
+                border-left-color: ${state.user.color} !important;
+                border-top-color: ${state.user.color} !important;
+                border-bottom-color: ${state.user.color} !important;
+              }
+              .yRemoteSelectionHead-${clientId}::after {
+                border-color: ${state.user.color} !important;
+              }
+              .yRemoteSelectionHead-${clientId}::before {
+                content: "${state.user.name}";
+                position: absolute;
+                top: -24px;
+                left: -2px;
+                background-color: ${state.user.color};
+                color: #fff;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+                white-space: nowrap;
+                pointer-events: none;
+                z-index: 50;
+                opacity: 0;
+                transition: opacity 0.2s ease-in-out;
+              }
+              .yRemoteSelectionHead-${clientId}:hover::before {
+                opacity: 1;
+              }
+            `;
+          }
+          return '';
+        }).join('\n')}
+      </style>
       <header className="h-14 bg-white dark:bg-[#1a2235] border-b border-gray-200 dark:border-white/10 flex items-center justify-between px-4 shrink-0 z-10">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={handleBackClick} className="h-8 w-8 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
@@ -738,8 +976,12 @@ const ProjectWorkspace = () => {
             </div>
             <div>
               <h1 className="font-bold text-sm tracking-tight leading-tight">{project?.title || 'Untitled'}</h1>
-              <div className="text-[10px] text-gray-500 flex items-center gap-1">
+              <div className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Online
+                <span className="mx-1.5 w-px h-2.5 bg-gray-300 dark:bg-white/20"></span>
+                <span className="flex items-center gap-1 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 transition-colors" onClick={() => { navigator.clipboard.writeText(projectId); alert('Project ID copied!') }} title="Copy Project ID">
+                  ID: <span className="font-mono bg-gray-100 dark:bg-white/10 px-1 rounded text-[9px]">{projectId}</span> <Copy className="w-3 h-3" />
+                </span>
               </div>
             </div>
           </div>
@@ -747,9 +989,21 @@ const ProjectWorkspace = () => {
 
         <div className="flex items-center gap-3">
           <div className="flex items-center -space-x-2 mr-4">
-            <div className="h-7 w-7 rounded-full border-2 border-white dark:border-[#1a2235] bg-blue-500 flex items-center justify-center text-white text-xs font-bold z-10" title="You">
-              Y
-            </div>
+            {onlineUsers.length > 0 ? (
+              onlineUsers.map((onlineUser, idx) => (
+                <div key={onlineUser._id || idx} className="h-7 w-7 rounded-full border-2 border-white dark:border-[#1a2235] bg-gray-200 overflow-visible z-10 hover:z-30 transition-all relative group cursor-pointer">
+                  <img crossOrigin="anonymous" src={onlineUser.avatar} alt={onlineUser.username} className="w-full h-full object-cover rounded-full" />
+                  <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-green-500 border border-white dark:border-[#1a2235] z-10"></span>
+                  <div className="absolute top-full mt-1.5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-gray-800 dark:bg-[#1a2235] text-white text-[11px] px-2 py-0.5 rounded shadow-lg whitespace-nowrap border border-gray-700 dark:border-white/10">
+                    {onlineUser.username}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="h-7 w-7 rounded-full border-2 border-white dark:border-[#1a2235] bg-blue-500 flex items-center justify-center text-white text-xs font-bold z-10" title="You">
+                Y
+              </div>
+            )}
           </div>
 
           <Button
@@ -767,6 +1021,26 @@ const ProjectWorkspace = () => {
             <Play className="h-3.5 w-3.5 mr-1.5" /> Run
           </Button>
 
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            onClick={() => setIsChatOpen(!isChatOpen)} 
+            className={`h-8 w-8 transition-colors ${isChatOpen ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
+            title="Chat"
+          >
+            <MessageSquare className="h-4 w-4" />
+          </Button>
+
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            onClick={() => setIsSettingsOpen(true)} 
+            className="h-8 w-8 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+            title="Project Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+
           <div className="w-px h-5 bg-gray-200 dark:bg-white/10 mx-1"></div>
           <ThemeToggle />
         </div>
@@ -776,7 +1050,7 @@ const ProjectWorkspace = () => {
       <div className="flex-1 overflow-hidden relative flex">
         <ResizablePanelGroup direction="horizontal">
           {/* Sidebar */}
-          <ResizablePanel defaultSize={190} minSize={150} maxSize={250} className="bg-gray-50/50 dark:bg-[#111827] border-r border-gray-200 dark:border-white/10 flex flex-col">
+          <ResizablePanel defaultSize={20} minSize={10} maxSize={40} className="bg-gray-50/50 dark:bg-[#111827] border-r border-gray-200 dark:border-white/10 flex flex-col">
             <div className="px-4 py-2 border-b border-gray-200 dark:border-white/10 flex justify-between items-center shrink-0">
               <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Explorer</h3>
               <div className="flex gap-1">
@@ -863,6 +1137,7 @@ const ProjectWorkspace = () => {
                         theme={appTheme === 'dark' ? 'vs-dark' : 'light'}
                         value={activeFileNode?.content || ''}
                         onChange={handleEditorChange}
+                        onMount={handleEditorDidMount}
                         options={{
                           minimap: { enabled: false },
                           fontSize: 14,
@@ -903,31 +1178,93 @@ const ProjectWorkspace = () => {
                   <TerminalComponent ref={terminalRef} />
                 </div>
               </ResizablePanel>
-            {/* preview*/}
-          {showPreview && (
-            <>
-              <ResizableHandle withHandle className="w-1 bg-transparent hover:bg-blue-500/50 active:bg-blue-500 transition-colors cursor-col-resize z-10" />
-              <ResizablePanel defaultSize={30} minSize={20}>
-                <div className="h-full flex flex-col bg-white">
-                  <div className="h-9 bg-gray-100 dark:bg-[#252526] flex items-center justify-between px-3 border-b border-gray-200 dark:border-white/10 shrink-0">
-                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Browser Preview</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-gray-500 hover:text-red-500 hover:bg-red-500/10 dark:text-gray-400 dark:hover:text-red-400"
-                      onClick={() => setShowPreview(false)}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <iframe src={previewUrl} className="flex-1 w-full border-0" />
-                </div>
-              </ResizablePanel>
-            </>
-          )}
             </ResizablePanelGroup>
           </ResizablePanel>
+          {/* preview*/}
+          {showPreview ? <ResizableHandle withHandle className="w-1 bg-transparent hover:bg-blue-500/50 active:bg-blue-500 transition-colors cursor-col-resize z-10" /> : null}
+          {showPreview ? (
+            <ResizablePanel defaultSize={30} minSize={20}>
+              <div className="h-full flex flex-col bg-white">
+                <div className="h-9 bg-gray-100 dark:bg-[#252526] flex items-center justify-between px-3 border-b border-gray-200 dark:border-white/10 shrink-0">
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Browser Preview</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-gray-500 hover:text-red-500 hover:bg-red-500/10 dark:text-gray-400 dark:hover:text-red-400"
+                    onClick={() => setShowPreview(false)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <iframe src={previewUrl} className="flex-1 w-full border-0" />
+              </div>
+            </ResizablePanel>
+          ) : null}
         </ResizablePanelGroup>
+
+        {/* Chat UI */}
+        {isChatOpen && (
+          <div className="absolute top-0 right-0 h-full w-80 bg-white dark:bg-[#151c2e] border-l border-gray-200 dark:border-white/10 flex flex-col shadow-2xl z-20">
+            <div className="h-14 border-b border-gray-200 dark:border-white/10 flex items-center justify-between px-4 shrink-0 bg-gray-50/50 dark:bg-[#1a2235]">
+              <h3 className="font-bold text-sm text-gray-800 dark:text-gray-200 flex items-center">
+                <MessageSquare className="w-4 h-4 mr-2 text-blue-500" />
+                Project Chat
+              </h3>
+              <Button variant="ghost" size="icon" onClick={() => setIsChatOpen(false)} className="h-7 w-7 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {chatMessages.length === 0 ? (
+                <div className="text-center text-xs text-gray-400 mt-10">
+                  No messages yet. Start the conversation!
+                </div>
+              ) : (
+                chatMessages.map((msg, i) => (
+                  <div key={i} className={`flex flex-col ${msg.userId === user._id ? 'items-end' : 'items-start'}`}>
+                    <div className="flex items-end gap-2 max-w-[85%]">
+                      {msg.userId !== user._id && (
+                        <img src={msg.avatar} alt="avatar" className="w-6 h-6 rounded-full shrink-0 object-cover border border-gray-200 dark:border-gray-700" crossOrigin="anonymous" />
+                      )}
+                      <div className={`px-3 py-2 rounded-2xl text-sm ${msg.userId === user._id ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm'}`}>
+                        {msg.text}
+                      </div>
+                    </div>
+                    <span className="text-[9px] text-gray-400 mt-1 mx-8">{msg.username}</span>
+                  </div>
+                ))
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            <div className="p-3 border-t border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#1a2235]">
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (!chatInput.trim()) return;
+                const message = {
+                  userId: user._id,
+                  username: user.username,
+                  avatar: user.avatar,
+                  text: chatInput.trim(),
+                  timestamp: new Date().toISOString()
+                };
+                socket.emit('send-chat-message', message);
+                setChatInput('');
+              }} className="flex items-center gap-2">
+                <Input 
+                  value={chatInput} 
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Type a message..." 
+                  className="h-9 bg-white dark:bg-[#0f172a] border-gray-200 dark:border-white/10 text-xs"
+                />
+                <Button type="submit" size="icon" className="h-9 w-9 bg-blue-600 hover:bg-blue-500 text-white shrink-0">
+                  <Send className="w-4 h-4" />
+                </Button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
@@ -985,6 +1322,93 @@ const ProjectWorkspace = () => {
             <Button variant="outline" onClick={() => setIsRenameModalOpen(false)}>Cancel</Button>
             <Button onClick={submitRename}>Rename</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!joinRequest} onOpenChange={(open) => { if (!open) handleJoinResponse(false); }}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white">
+          <DialogHeader>
+            <DialogTitle>Join Request</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p><strong>{joinRequest?.user?.username}</strong> wants to join this session.</p>
+          </div>
+          <DialogFooter className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => handleJoinResponse(false)} className="text-red-500 hover:text-red-600 dark:hover:text-red-400">Decline</Button>
+            <Button onClick={() => handleJoinResponse(true)} className="bg-blue-600 hover:bg-blue-700 text-white">Accept</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <DialogContent className="sm:max-w-md bg-white/80 dark:bg-[#0f172a]/90 backdrop-blur-xl border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white shadow-xl">
+          <DialogHeader className="border-b border-gray-200 dark:border-white/10 pb-4">
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+              Project Settings
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Project Details</h3>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">{project?.title}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{project?.description || 'No description provided.'}</p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Owner</h3>
+              <div className="flex items-center gap-3 bg-gray-50 dark:bg-white/5 p-3 rounded-lg border border-gray-100 dark:border-white/10">
+                <div className="relative">
+                  <img crossOrigin="anonymous" src={project?.owner?.avatar} alt={project?.owner?.username} className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-[#1a2235]" />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                    {project?.owner?.username}
+                    {getUserColor(project?.owner?.username) && (
+                      <span 
+                        className="w-3 h-3 rounded-full shadow-sm border border-gray-200 dark:border-white/10"
+                        style={{ backgroundColor: getUserColor(project?.owner?.username) }}
+                        title="Active cursor color"
+                      />
+                    )}
+                    <span className="bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">Owner</span>
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{project?.owner?.email}</p>
+                </div>
+              </div>
+            </div>
+
+            {project?.collaborators?.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Collaborators</h3>
+                <div className="space-y-2">
+                  {project.collaborators.map(collaborator => {
+                    const cursorColor = getUserColor(collaborator.username);
+                    return (
+                      <div key={collaborator._id} className="flex items-center gap-3 bg-gray-50 dark:bg-white/5 p-3 rounded-lg border border-gray-100 dark:border-white/10 transition-colors">
+                        <div className="relative">
+                          <img crossOrigin="anonymous" src={collaborator.avatar} alt={collaborator.username} className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-[#1a2235]" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                            {collaborator.username}
+                            {cursorColor && (
+                              <span 
+                                className="w-3 h-3 rounded-full shadow-sm border border-gray-200 dark:border-white/10"
+                                style={{ backgroundColor: cursorColor }}
+                                title="Active cursor color"
+                              />
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{collaborator.email}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

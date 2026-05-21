@@ -45,7 +45,8 @@ export const getAllProjects = asyncHandler(async (req, res, next) => {
         ]
     })
         .sort({ lastUpdatedAt: -1 })
-        .populate('owner', 'username avatar email');
+        .populate('owner', 'username avatar email')
+        .populate('collaborators', 'username avatar email');
 
     return res
         .status(200)
@@ -203,8 +204,10 @@ export const duplicateProject = asyncHandler(async (req, res, next) => {
 
 export const getProjectById = asyncHandler(async (req, res, next) => {
     const { projectId } = req.params;
-    const project = await Project.findById(projectId).populate('owner', 'username avatar email');
-    
+    const project = await Project.findById(projectId)
+        .populate('owner', 'username avatar email')
+        .populate('collaborators', 'username avatar email');
+
     if (!project) {
         throw new ApiError(404, "Project not found");
     }
@@ -235,22 +238,92 @@ export const saveProjectFiles = asyncHandler(async (req, res, next) => {
     return res.status(200).json(new ApiResponse(200, {}, "Files saved successfully"));
 });
 
-export const updateOpenedFilesOfProject= asyncHandler(async (req, res, next)=>{
+export const updateOpenedFilesOfProject = asyncHandler(async (req, res, next) => {
     const { projectId } = req.params;
     const { openedFiles } = req.body;
 
     if (!Array.isArray(openedFiles)) {
         throw new ApiError(400, "openedFiles must be an array");
     }
-    
+
     const project = await Project.findById(projectId);
     if (!project) {
         throw new ApiError(404, "Project not found");
     }
-    
+
     project.openedFiles = openedFiles;
     project.markModified('openedFiles');
     await project.save({ validateBeforeSave: false });
-    
+
     return res.status(200).json(new ApiResponse(200, project, "Opened files updated successfully"));
 });
+
+export const addCollaboratorToProject = asyncHandler(async (req, res, next) => {
+    const { projectId } = req.params;
+    const { userId } = req.body;
+
+    if (!projectId || !userId) {
+        throw new ApiError(400, "Project ID and User ID are required");
+    }
+
+    const project = await Project.findByIdAndUpdate(
+        projectId,
+        { $addToSet: { collaborators: userId } },
+        { new: true }
+    );
+    
+    const user = await User.findByIdAndUpdate(
+        userId,
+        { $addToSet: { collaboratedProjects: projectId } },
+        { new: true }
+    );
+
+    if (!project || !user) {
+        throw new ApiError(404, "Project or User not found");
+    }
+
+    return res.status(200).json(new ApiResponse(200, project, "Collaborator added successfully"));
+});
+
+export const addOnlineUserToProject = asyncHandler(async (req, res, next) => {
+    const { projectId } = req.params;
+    const { userId } = req.body;
+
+    if (!projectId || !userId) {
+        throw new ApiError(400, "Project ID and User ID are required");
+    }
+
+    const project = await Project.findByIdAndUpdate(
+        projectId,
+        { $addToSet: { onlineUsers: userId } },
+        { new: true }
+    ).populate('onlineUsers', 'username avatar firstName lastName');
+
+    if (!project) {
+        throw new ApiError(404, "Project not found");
+    }
+
+    return res.status(200).json(new ApiResponse(200, project, "Online user added successfully"));
+});
+
+export const removeOnlineUserFromProject = asyncHandler(async (req, res, next) => {
+    const { projectId } = req.params;
+    const { userId } = req.body;
+
+    if (!projectId || !userId) {
+        throw new ApiError(400, "Project ID and User ID are required");
+    }
+
+    const project = await Project.findByIdAndUpdate(
+        projectId,
+        { $pull: { onlineUsers: userId } },
+        { new: true }
+    ).populate('onlineUsers', 'username avatar firstName lastName');
+
+    if (!project) {
+        throw new ApiError(404, "Project not found");
+    }
+
+    return res.status(200).json(new ApiResponse(200, project, "Online user removed successfully"));
+});
+

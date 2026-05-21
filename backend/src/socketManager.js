@@ -1,0 +1,152 @@
+import { Project } from "./models/project.models.js";
+import { User } from "./models/user.models.js";
+
+export const initializeSocket = (io) => {
+    io.on('connection', (socket) => {
+        console.log('A user connected:', socket.id);
+
+        // User joins the room for their specific project
+        socket.on('join-workspace-room', async (data) => {
+            const { projectId, user } = data;
+            if (!projectId || !user) return;
+
+            socket.join(`project_${projectId}`);
+            socket.projectId = projectId;
+            socket.userId = user._id;
+
+            console.log(`User ${user.username} joined room project_${projectId}`);
+
+            // Broadcast updated online users
+            const room = io.sockets.adapter.rooms.get(`project_${projectId}`);
+            const onlineUsersMap = new Map();
+            if (room) {
+                for (const clientId of room) {
+                    const clientSocket = io.sockets.sockets.get(clientId);
+                    if (clientSocket && clientSocket.user) {
+                        onlineUsersMap.set(clientSocket.user._id.toString(), clientSocket.user);
+                    }
+                }
+            }
+            io.to(`project_${projectId}`).emit('online-users-updated', Array.from(onlineUsersMap.values()));
+        });
+
+        // Joiner requests to join the project
+        socket.on('request-to-join', (data) => {
+            const { projectId, user } = data;
+            // Emit to the owner in the project room
+            io.to(`project_${projectId}`).emit('join-request', {
+                projectId,
+                user,
+                socketId: socket.id // We pass the joiner's socket ID to reply directly
+            });
+        });
+
+        // Owner responds to the join request
+        socket.on('join-response', async (data) => {
+            const { accepted, projectId, joinerId, joinerSocketId } = data;
+
+            if (accepted) {
+                try {
+                    // Use $addToSet to avoid duplicates without complex array logic
+                    const project = await Project.findByIdAndUpdate(
+                        projectId,
+                        { $addToSet: { collaborators: joinerId } },
+                        { new: true }
+                    );
+                    
+                    const user = await User.findByIdAndUpdate(
+                        joinerId,
+                        { $addToSet: { collaboratedProjects: projectId } },
+                        { new: true }
+                    );
+
+                    if (project && user) {
+                        // Inform the joiner that they were accepted
+                        io.to(joinerSocketId).emit('join-result', { accepted: true, projectId });
+                    } else {
+                        io.to(joinerSocketId).emit('join-result', { accepted: false, error: 'Database record not found' });
+                    }
+                } catch (error) {
+                    console.error("Error processing join response:", error);
+                    io.to(joinerSocketId).emit('join-result', { accepted: false, error: 'Server error' });
+                }
+            } else {
+                // Inform the joiner that they were declined
+                io.to(joinerSocketId).emit('join-result', { accepted: false, reason: 'Declined by owner' });
+            }
+        });
+
+        // File System Sync Events
+        socket.on('file-created', (data) => {
+            if (!socket.projectId) return;
+            // Broadcast to all other users in the room
+            socket.to(`project_${socket.projectId}`).emit('file-created', data);
+        });
+
+        socket.on('file-renamed', (data) => {
+            if (!socket.projectId) return;
+            socket.to(`project_${socket.projectId}`).emit('file-renamed', data);
+        });
+
+        socket.on('file-deleted', (data) => {
+            if (!socket.projectId) return;
+            socket.to(`project_${socket.projectId}`).emit('file-deleted', data);
+        });
+
+        socket.on('file-tree-updated', (data) => {
+            if (!socket.projectId) return;
+            socket.to(`project_${socket.projectId}`).emit('file-tree-updated', data);
+        });
+
+        socket.on('opened-files-updated', (data) => {
+            if (!socket.projectId) return;
+            socket.to(`project_${socket.projectId}`).emit('opened-files-updated', data);
+        });
+
+        socket.on('send-chat-message', (data) => {
+            if (!socket.projectId) return;
+            // Broadcast to everyone in the room including the sender
+            io.to(`project_${socket.projectId}`).emit('new-chat-message', data);
+        });
+
+        socket.on('leave-workspace-room', async (data) => {
+            const { projectId, userId } = data;
+            if (!projectId || !userId) return;
+
+            socket.leave(`project_${projectId}`);
+            if (socket.projectId === projectId) socket.projectId = null;
+            if (socket.userId === userId) socket.userId = null;
+
+            console.log(`User ${userId} left room project_${projectId}`);
+
+            const room = io.sockets.adapter.rooms.get(`project_${projectId}`);
+            const onlineUsersMap = new Map();
+            if (room) {
+                for (const clientId of room) {
+                    const clientSocket = io.sockets.sockets.get(clientId);
+                    if (clientSocket && clientSocket.user) {
+                        onlineUsersMap.set(clientSocket.user._id.toString(), clientSocket.user);
+                    }
+                }
+            }
+            io.to(`project_${projectId}`).emit('online-users-updated', Array.from(onlineUsersMap.values()));
+        });
+
+        socket.on('disconnect', async () => {
+            console.log('User disconnected:', socket.id);
+            if (socket.projectId && socket.userId) {
+                const room = io.sockets.adapter.rooms.get(`project_${socket.projectId}`);
+                const onlineUsersMap = new Map();
+                if (room) {
+                    for (const clientId of room) {
+                        const clientSocket = io.sockets.sockets.get(clientId);
+                        if (clientSocket && clientSocket.user) {
+                            onlineUsersMap.set(clientSocket.user._id.toString(), clientSocket.user);
+                        }
+                    }
+                }
+                io.to(`project_${socket.projectId}`).emit('online-users-updated', Array.from(onlineUsersMap.values()));
+            }
+        });
+    });
+};

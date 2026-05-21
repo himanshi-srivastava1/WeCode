@@ -7,6 +7,7 @@ import { LogOut, Code, Users, Settings, Plus, FolderOpen, Server, Flame, Search,
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { fetchWithAuth } from '@/lib/api';
 import { Link, useNavigate } from 'react-router-dom';
+import { socket } from '@/socket.js';
 import Footer from '@/components/ui/Footer';
 
 const ReactIcon = ({ className }) => (
@@ -85,6 +86,40 @@ const Dashboard = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
   const navigate = useNavigate();
+
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [joinSessionId, setJoinSessionId] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
+
+  const handleJoinSession = () => {
+    if (!joinSessionId.trim()) return;
+    setIsJoining(true);
+    socket.connect();
+    
+    const onJoinResult = (data) => {
+        setIsJoining(false);
+        socket.off('join-result', onJoinResult);
+        if (data.accepted) {
+            setIsJoinModalOpen(false);
+            fetchWithAuth('http://localhost:3000/api/v1/project/get-all-projects')
+              .then(res => res.json())
+              .then(data => {
+                if (data.success) setProjects(data.data);
+              });
+            navigate(`/project/${data.projectId}`);
+        } else {
+            alert(data.reason || 'Request declined or failed.');
+            socket.disconnect();
+        }
+    };
+    
+    socket.on('join-result', onJoinResult);
+    
+    socket.emit('request-to-join', {
+        projectId: joinSessionId.trim(),
+        user: { _id: user._id, username: user.username, avatar: user.avatar }
+    });
+  };
 
   const filteredTemplates = templatesData.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -422,7 +457,9 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          <Card className="bg-white dark:bg-white/5 backdrop-blur-xl border-gray-200 dark:border-white/10 hover:border-purple-400 dark:hover:border-purple-500/50 hover:bg-gray-50 dark:hover:bg-white/10 transition-all duration-500 cursor-pointer group shadow-sm dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.36)]">
+          <Card 
+            onClick={() => { setIsJoinModalOpen(true); setJoinSessionId(''); }}
+            className="bg-white dark:bg-white/5 backdrop-blur-xl border-gray-200 dark:border-white/10 hover:border-purple-400 dark:hover:border-purple-500/50 hover:bg-gray-50 dark:hover:bg-white/10 transition-all duration-500 cursor-pointer group shadow-sm dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.36)]">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center text-xl text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                 <div className="bg-purple-500/10 p-2 rounded-lg mr-3 group-hover:bg-purple-500/20 transition-colors">
@@ -435,7 +472,7 @@ const Dashboard = () => {
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
                 Have an invite link? Jump straight into an active coding session with your peers.
               </p>
-              <Button variant="outline" className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/20 text-gray-700 dark:text-gray-200 transition-all duration-300">
+              <Button onClick={(e) => { e.stopPropagation(); setIsJoinModalOpen(true); setJoinSessionId(''); }} variant="outline" className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/20 text-gray-700 dark:text-gray-200 transition-all duration-300">
                 Join Session
               </Button>
             </CardContent>
@@ -490,9 +527,21 @@ const Dashboard = () => {
                             <span className="text-xs text-gray-500 capitalize block truncate">{project.template || 'react'}</span>
                           </div>
                         </div>
-                        <span className="text-[10px] bg-gray-200 dark:bg-white/10 px-2 py-1 rounded-md text-gray-600 dark:text-gray-300 font-medium shrink-0">
-                          {project.owner?.username || user?.username}
-                        </span>
+                        <div className="flex -space-x-1.5 shrink-0 hover:z-10 relative">
+                          <div className="h-6 w-6 rounded-full border-2 border-gray-50 dark:border-[#1a2235] bg-gray-200 flex items-center justify-center relative group z-10 overflow-hidden cursor-pointer" title={`Owner: ${project.owner?.username || user?.username}`}>
+                            <img crossOrigin="anonymous" src={project.owner?.avatar || user?.avatar} alt={project.owner?.username} className="w-full h-full object-cover" />
+                          </div>
+                          {project.collaborators?.slice(0, 3).map((collab, i) => (
+                            <div key={collab._id || i} className="h-6 w-6 rounded-full border-2 border-gray-50 dark:border-[#1a2235] bg-gray-200 flex items-center justify-center relative group overflow-hidden cursor-pointer" style={{ zIndex: 9 - i }} title={collab.username}>
+                              <img crossOrigin="anonymous" src={collab.avatar} alt={collab.username} className="w-full h-full object-cover" />
+                            </div>
+                          ))}
+                          {project.collaborators?.length > 3 && (
+                            <div className="h-6 w-6 rounded-full border-2 border-gray-50 dark:border-[#1a2235] bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-500 dark:text-gray-300 flex items-center justify-center relative group cursor-pointer" style={{ zIndex: 5 }}>
+                              +{project.collaborators.length - 3}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <div className="mt-3 flex-1 overflow-hidden">
@@ -557,13 +606,17 @@ const Dashboard = () => {
                                     <Star className={`h-3.5 w-3.5 ${user?.starredProjects?.includes(project._id) ? 'fill-current text-yellow-500' : ''}`} />
                                     {user?.starredProjects?.includes(project._id) ? 'Remove Star' : 'Add to Starred'}
                                   </button>
-                                  <div className="h-px bg-gray-200 dark:bg-white/10 my-0.5" />
-                                  <button
-                                    className="w-full text-left px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center gap-2 transition-colors"
-                                    onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setProjectToDelete(project._id); setIsDeleteDialogOpen(true); }}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" /> Delete
-                                  </button>
+                                  {project.owner?._id === user._id && (
+                                    <>
+                                      <div className="h-px bg-gray-200 dark:bg-white/10 my-0.5" />
+                                      <button
+                                        className="w-full text-left px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center gap-2 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setProjectToDelete(project._id); setIsDeleteDialogOpen(true); }}
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" /> Delete
+                                      </button>
+                                      </>
+                                    )}
                                 </div>
                               </>
                             )}
@@ -763,6 +816,41 @@ const Dashboard = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold tracking-tight">Join Session</DialogTitle>
+            <DialogDescription className="text-gray-500 dark:text-gray-400">
+              Enter the Project ID to send a join request to the owner.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-2">
+              <Label htmlFor="sessionId" className="text-sm font-medium text-gray-700 dark:text-gray-300">Project ID</Label>
+              <Input
+                id="sessionId"
+                value={joinSessionId}
+                onChange={(e) => setJoinSessionId(e.target.value)}
+                placeholder="e.g. 123e4567-e89b-12d3-a456-426614174000"
+                className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white h-11"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsJoinModalOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleJoinSession}
+              disabled={!joinSessionId.trim() || isJoining}
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white border-0 shadow-lg shadow-purple-500/25 transition-all duration-300 min-w-[100px]"
+            >
+              {isJoining ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Join'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Profile Modal */}
       <Dialog open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen}>
         <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
@@ -946,6 +1034,36 @@ const Dashboard = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Join Session Modal */}
+      <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-white dark:to-gray-400">Join a Session</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="join-session-id" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Project ID</Label>
+            <Input
+              id="join-session-id"
+              value={joinSessionId}
+              onChange={(e) => setJoinSessionId(e.target.value)}
+              placeholder="Enter the Project ID to join..."
+              className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsJoinModalOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleJoinSession}
+              disabled={isJoining || !joinSessionId.trim()}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-sm"
+            >
+              {isJoining ? 'Requesting to Join...' : 'Join Workspace'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Edit Description Modal */}
       <Dialog open={isEditDescModalOpen} onOpenChange={setIsEditDescModalOpen}>
         <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">

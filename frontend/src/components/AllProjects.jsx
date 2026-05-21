@@ -241,9 +241,21 @@ const AllProjects = () => {
                             </div>
                           </td>
                           <td className="py-4 px-6 align-middle">
-                            <span className="text-xs bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-md text-gray-600 dark:text-gray-300 font-medium">
-                              {project.owner?.username || user?.username}
-                            </span>
+                            <div className="flex -space-x-1.5 shrink-0 hover:z-10 relative">
+                              <div className="h-6 w-6 rounded-full border-2 border-gray-50 dark:border-[#1a2235] bg-gray-200 flex items-center justify-center relative group z-10 overflow-hidden cursor-pointer" title={`Owner: ${project.owner?.username || user?.username}`}>
+                                <img crossOrigin="anonymous" src={project.owner?.avatar || user?.avatar} alt={project.owner?.username} className="w-full h-full object-cover" />
+                              </div>
+                              {project.collaborators?.slice(0, 3).map((collab, i) => (
+                                <div key={collab._id || i} className="h-6 w-6 rounded-full border-2 border-gray-50 dark:border-[#1a2235] bg-gray-200 flex items-center justify-center relative group overflow-hidden cursor-pointer" style={{ zIndex: 9 - i }} title={collab.username}>
+                                  <img crossOrigin="anonymous" src={collab.avatar} alt={collab.username} className="w-full h-full object-cover" />
+                                </div>
+                              ))}
+                              {project.collaborators?.length > 3 && (
+                                <div className="h-6 w-6 rounded-full border-2 border-gray-50 dark:border-[#1a2235] bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-500 dark:text-gray-300 flex items-center justify-center relative group cursor-pointer" style={{ zIndex: 5 }}>
+                                  +{project.collaborators.length - 3}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="py-4 px-6 align-middle">
                             <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -302,13 +314,17 @@ const AllProjects = () => {
                                         <Star className={`h-3.5 w-3.5 ${user?.starredProjects?.includes(project._id) ? 'fill-current text-yellow-500' : ''}`} />
                                         {user?.starredProjects?.includes(project._id) ? 'Remove Star' : 'Add to Starred'}
                                       </button>
-                                      <div className="h-px bg-gray-200 dark:bg-white/10 my-0.5" />
-                                      <button
-                                        className="w-full text-left px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center gap-2 transition-colors"
-                                        onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setProjectToDelete(project._id); setIsDeleteDialogOpen(true); }}
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" /> Delete
-                                      </button>
+                                      {project.owner?._id === user._id && (
+                                        <>
+                                          <div className="h-px bg-gray-200 dark:bg-white/10 my-0.5" />
+                                          <button
+                                            className="w-full text-left px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center gap-2 transition-colors"
+                                            onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); setProjectToDelete(project._id); setIsDeleteDialogOpen(true); }}
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" /> Delete
+                                          </button>
+                                        </>
+                                      )}
                                     </div>
                                   </>
                                 )}

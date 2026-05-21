@@ -36,7 +36,7 @@ const updateAvatar = asyncHandler(async (req, res) => {
     await user.save({ validateBeforeSave: false });
 
     return res.status(200).json(
-        new ApiResponse(200, "Profile picture updated successfully", {
+        new ApiResponse(200, {
             avatar: cloudinaryResponse.secure_url,
             user: {
                 _id: user._id,
@@ -44,11 +44,11 @@ const updateAvatar = asyncHandler(async (req, res) => {
                 firstName: user.firstName,
                 lastName: user.lastName,
                 email: user.email,
-                avatar: user.avatar,
+                avatar: cloudinaryResponse.secure_url,
                 isEmailVerified: user.isEmailVerified,
                 starredProjects: user.starredProjects,
             }
-        })
+        }, "Profile picture updated successfully")
     );
 });
 

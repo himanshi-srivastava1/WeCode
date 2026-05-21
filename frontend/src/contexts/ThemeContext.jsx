@@ -4,7 +4,6 @@ const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
-    // Check if user has a preference in local storage from a previous session
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
       const user = JSON.parse(storedUser);
@@ -12,8 +11,6 @@ export const ThemeProvider = ({ children }) => {
     }
     const storedTheme = localStorage.getItem("theme");
     if (storedTheme) return storedTheme;
-    
-    // Default to dark as per requirements
     return "dark";
   });
 
@@ -30,9 +27,7 @@ export const ThemeProvider = ({ children }) => {
 
   const toggleTheme = async () => {
     const newTheme = theme === "dark" ? "light" : "dark";
-    setTheme(newTheme);
-    
-    // Update local storage
+    setTheme(newTheme); 
     localStorage.setItem("theme", newTheme);
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
@@ -40,8 +35,6 @@ export const ThemeProvider = ({ children }) => {
       user.preferredMode = newTheme;
       localStorage.setItem("user", JSON.stringify(user));
     }
-
-    // Update backend if authenticated
     const token = localStorage.getItem("accessToken");
     if (token) {
       try {

@@ -3,3 +3,28 @@
 body {
   @apply bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white transition-colors duration-300;
 }
+
+/* Yjs + Monaco Live Cursor Styling */
+.yRemoteSelection {
+  background-color: rgba(250, 129, 0, 0.4); /* Fallback */
+}
+
+.yRemoteSelectionHead {
+  position: absolute;
+  border-left: 2px solid;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-color: orange; /* Fallback */
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.yRemoteSelectionHead::after {
+  position: absolute;
+  content: ' ';
+  border: 3px solid;
+  border-color: orange; /* Fallback */
+  border-radius: 4px;
+  left: -4px;
+  top: -5px;
+}

@@ -42,6 +42,10 @@ const projectSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'User'
     }],
+    onlineUsers: [{
+        type: Schema.Types.ObjectId,
+        ref: 'User'
+    }],
     lastUpdatedAt: {
         type: Date,
         default: Date.now
