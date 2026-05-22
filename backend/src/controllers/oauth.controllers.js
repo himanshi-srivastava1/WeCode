@@ -1,6 +1,6 @@
 import passport from '../config/passport.js';
 
-export const googleAuth = passport.authenticate('google', { scope: ['profile', 'email'] });
+export const googleAuth = passport.authenticate('google', { scope: ['profile', 'email'], prompt: 'select_account' });
 
 export const googleCallback = (req, res, next) => {
   passport.authenticate('google', { session: false }, (err, user, info) => {
