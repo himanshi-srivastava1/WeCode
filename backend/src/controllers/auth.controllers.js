@@ -60,7 +60,7 @@ const registerUser = asyncHandler(async (req, res) => {
                 subject: "Email Verification",
                 mailgenContent: emailVerificationMailgenContent(
                     user.username,
-                    `${backendUrl}/api/v1/users/verify-email/${unHashedToken}`
+                    `${backendUrl}/api/v1/auth/verify-email/${unHashedToken}`
                 ),
             });
             console.log("Verification email sent successfully in background");
@@ -194,7 +194,7 @@ const resendEmailVerification = asyncHandler(async (req, res) => {
         subject: "Email Verification",
         mailgenContent: emailVerificationMailgenContent(
             user.username,
-            `${backendUrl}/api/v1/users/verify-email/${unHashedToken}`
+            `${backendUrl}/api/v1/auth/verify-email/${unHashedToken}`
         ),
     });
     return res

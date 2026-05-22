@@ -1,80 +1,104 @@
 import Mailgen from "mailgen";
-import nodemailer from "nodemailer";
-import dns from "dns";
+import { google } from "googleapis";
 
-// Force Node to prioritize IPv4 over IPv6. This bypasses the Render ENETUNREACH IPv6 bug entirely.
-dns.setDefaultResultOrder('ipv4first');
-const emailVerificationMailgenContent= (username, verificationUrl)=>{
+const createGmailClient = () => {
+    const oAuth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        "https://developers.google.com/oauthplayground"
+    );
+
+    oAuth2Client.setCredentials({
+        refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+    });
+
+    return google.gmail({ version: 'v1', auth: oAuth2Client });
+};
+
+const emailVerificationMailgenContent = (username, verificationUrl) => {
     return {
-        body:{
-            name:username,
-            intro:'Welcome to our app. We are excited to have you on board.',
-            action:{
+        body: {
+            name: username,
+            intro: 'Welcome to our app. We are excited to have you on board.',
+            action: {
                 instructions: "To verify your email , please click on the following button.",
-                button:{
-                    color:'#1aae5aff',
-                    text:'Verify your email',
-                    link:verificationUrl,
-                },
+                button: {
+                    color: '#22bc66',
+                    text: 'Verify your email',
+                    link: verificationUrl
+                }
             },
-            outro:"Need help, or have questions? Just reply to this email, we'd love to help."
+            outro: 'Need help, or have questions? Just reply to this email, we\'d love to help.'
         }
     }
-};
+}
 
-
-const forgotPasswordMailgenContent=(username, passwordResetUrl)=>{
-    return{
-       body:{
-            name:username,
-            intro:'We got a request to reset the password of your account.',
-            action:{
-                instructions: "To reset your password , please click on the following button.",
-                button:{
-                    color:'#1aae5aff',
-                    text:'Reset your password',
-                    link:passwordResetUrl,
-                },
+const forgotPasswordMailgenContent = (username, passwordResetUrl) => {
+    return {
+        body: {
+            name: username,
+            intro: 'We got a request to reset the password of our account',
+            action: {
+                instructions: "To reset your password click on the following button or link:",
+                button: {
+                    color: '#22bc66',
+                    text: 'Reset password',
+                    link: passwordResetUrl
+                }
             },
-            outro:"Need help, or have questions? Just reply to this email, we'd love to help."
+            outro: 'Need help, or have questions? Just reply to this email, we\'d love to help.'
         }
     }
-};
+}
 
-const sendEmail=async (options)=>{
-    const mailGenerator=new Mailgen({
-        theme:"default",
-        product:{
-            name:"WeCode",
-            link:'https://wecode.com'
+const sendEmail = async (options) => {
+    const mailGenerator = new Mailgen({
+        theme: "default",
+        product: {
+            name: "WeCode",
+            link: 'https://wecode.com'
         },
     });
-    const emailTextual=mailGenerator.generatePlaintext(options.mailgenContent);
-    const emailHtml=mailGenerator.generate(options.mailgenContent);
-    const transporter=nodemailer.createTransport({
-        host:process.env.SMTP_HOST || "smtp.gmail.com",
-        port:process.env.SMTP_PORT || 587,
-        secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
-        auth:{
-            user:process.env.SMTP_USER,
-            pass:process.env.SMTP_PASS,
-        }
-    });
-    const mail={
-        from:"mail.wecode@gmail.com",
-        to:options.email,
-        subject:options.subject,
-        text:emailTextual,
-        html:emailHtml
-    };
-    try{
-        await transporter.sendMail(mail);
-    }
-    catch(error){
-        console.error("Email service failed.");
+
+    const emailHtml = mailGenerator.generate(options.mailgenContent);
+
+    try {
+        const gmail = createGmailClient();
+        
+        const senderAddress = process.env.GMAIL_USER;
+        
+        // Construct raw MIME email
+        const messageParts = [
+            `To: ${options.email}`,
+            `From: WeCode <${senderAddress}>`,
+            `Subject: ${options.subject}`,
+            'MIME-Version: 1.0',
+            'Content-Type: text/html; charset=utf-8',
+            '',
+            emailHtml
+        ];
+
+        const message = messageParts.join('\n');
+        
+        // Encode to base64url format required by Gmail API
+        const encodedMessage = Buffer.from(message)
+            .toString('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+
+        const res = await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: {
+                raw: encodedMessage,
+            },
+        });
+        
+        console.log("Gmail API email sent successfully:", res.data);
+    } catch (error) {
+        console.error("Email service failed via Gmail API.");
         console.error(error);
     }
 }
 
-
-export {emailVerificationMailgenContent, forgotPasswordMailgenContent, sendEmail};
+export { emailVerificationMailgenContent, forgotPasswordMailgenContent, sendEmail };
