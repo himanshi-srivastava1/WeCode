@@ -51,14 +51,14 @@ const registerUser = asyncHandler(async (req, res) => {
     await user.save({ validateBeforeSave: false });
 
     const backendUrl = process.env.NODE_ENV === "production" ? `https://${req.get('host')}` : `${req.protocol}://${req.get('host')}`;
-    sendEmail({
+    await sendEmail({
         email: user?.email,
         subject: "Email Verification",
         mailgenContent: emailVerificationMailgenContent(
             user.username,
             `${backendUrl}/api/v1/users/verify-email/${unHashedToken}`
         ),
-    }).catch(console.error);
+    });
     const createdUser = await User.findById(user._id).select(
         "-password -refreshToken -emailVerificationToken -emailVerificationExpiry"
     );
