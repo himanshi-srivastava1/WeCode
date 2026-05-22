@@ -1,5 +1,6 @@
 import { Project } from "./models/project.models.js";
 import { User } from "./models/user.models.js";
+import mongoose from "mongoose";
 
 export const initializeSocket = (io) => {
     io.on('connection', (socket) => {
@@ -34,14 +35,18 @@ export const initializeSocket = (io) => {
         socket.on('request-to-join', async (data) => {
             const { projectId, user } = data;
             try {
-                const project = await Project.findOne({ projectId: projectId });
+                const query = mongoose.Types.ObjectId.isValid(projectId) 
+                    ? { $or: [{ _id: projectId }, { projectId: projectId }] }
+                    : { projectId: projectId };
+                
+                const project = await Project.findOne(query);
                 if (!project) {
                     return io.to(socket.id).emit('join-result', { accepted: false, reason: 'Invalid Project ID' });
                 }
 
-                // Emit to the owner in the project room
-                io.to(`project_${projectId}`).emit('join-request', {
-                    projectId,
+                // Emit to the owner in the project room using the actual MongoDB _id
+                io.to(`project_${project._id}`).emit('join-request', {
+                    projectId: project._id,
                     user,
                     socketId: socket.id // We pass the joiner's socket ID to reply directly
                 });
