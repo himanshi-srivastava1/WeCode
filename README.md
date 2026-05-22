@@ -8,6 +8,7 @@ WeCode is a powerful, web-based collaborative code editor that allows multiple d
 - **Live Multi-player Cursors**: See exactly who is typing what and where, with dynamic color-coded cursors and hover name tags.
 - **In-Browser Execution**: Run full-stack Node.js, React, and Vue applications directly in your browser using [WebContainers](https://webcontainers.io/). No remote servers required for execution!
 - **Rich Code Editor**: Integrated with [Monaco Editor](https://microsoft.github.io/monaco-editor/) (the engine behind VS Code) for syntax highlighting, autocompletion, and a premium editing experience.
+- **AI-Powered Autocomplete**: Write code faster with our integrated Google Gemini AI engine. The editor analyzes your context and intelligently suggests inline code completions as you type.
 - **Project Management**: Create, duplicate, and manage workspaces. Invite collaborators and manage project access securely.
 - **Team Presence & Chat**: View who is currently online in your workspace with live avatar indicators and communicate via the integrated ephemeral chat.
 - **Modern UI/UX**: A sleek, responsive, glassmorphic interface with full dark mode support.
@@ -25,6 +26,7 @@ WeCode is a powerful, web-based collaborative code editor that allows multiple d
 **Backend**
 - Node.js & Express
 - MongoDB & Mongoose
+- Google Gemini AI (`@google/generative-ai`)
 - Socket.IO (WebSockets)
 - JWT Authentication
 - Cloudinary (Avatar image hosting)

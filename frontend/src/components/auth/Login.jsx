@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,14 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('registered') === 'true') {
+      setSuccess('Account created successfully! Please log in (and check your email for verification).');
+    }
+  }, []);
 
   const handleEmailLogin = async (e) => {
     e.preventDefault();
@@ -81,6 +89,11 @@ const Login = () => {
           {error && (
             <Alert variant="destructive" className="bg-red-500/10 border-red-500/20 text-red-400">
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert className="bg-green-500/10 border-green-500/20 text-green-500">
+              <AlertDescription>{success}</AlertDescription>
             </Alert>
           )}
 
