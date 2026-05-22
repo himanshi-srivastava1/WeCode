@@ -62,16 +62,20 @@ export const initializeSocket = (io) => {
 
             if (accepted) {
                 try {
-                    // Use $addToSet to avoid duplicates without complex array logic
-                    const project = await Project.findByIdAndUpdate(
-                        projectId,
+                    // Intelligently find project by either MongoDB _id or UUID string
+                    const query = mongoose.Types.ObjectId.isValid(projectId) 
+                        ? { $or: [{ _id: projectId }, { projectId: projectId }] }
+                        : { projectId: projectId };
+
+                    const project = await Project.findOneAndUpdate(
+                        query,
                         { $addToSet: { collaborators: joinerId } },
                         { new: true }
                     );
                     
                     const user = await User.findByIdAndUpdate(
                         joinerId,
-                        { $addToSet: { collaboratedProjects: projectId } },
+                        { $addToSet: { collaboratedProjects: project ? project._id : projectId } },
                         { new: true }
                     );
 

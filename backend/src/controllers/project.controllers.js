@@ -5,6 +5,7 @@ import { asyncHandler } from "../utils/async-handler.js";
 import { Project } from "../models/project.models.js";
 import crypto from 'crypto';
 import { getTemplateFiles } from "../utils/templates.js";
+import mongoose from "mongoose";
 
 export const createProject = asyncHandler(async (req, res, next) => {
     const { title, description, template } = req.body;
@@ -266,15 +267,19 @@ export const addCollaboratorToProject = asyncHandler(async (req, res, next) => {
         throw new ApiError(400, "Project ID and User ID are required");
     }
 
-    const project = await Project.findByIdAndUpdate(
-        projectId,
+    const query = mongoose.Types.ObjectId.isValid(projectId) 
+        ? { $or: [{ _id: projectId }, { projectId: projectId }] }
+        : { projectId: projectId };
+
+    const project = await Project.findOneAndUpdate(
+        query,
         { $addToSet: { collaborators: userId } },
         { new: true }
     );
     
     const user = await User.findByIdAndUpdate(
         userId,
-        { $addToSet: { collaboratedProjects: projectId } },
+        { $addToSet: { collaboratedProjects: project ? project._id : projectId } },
         { new: true }
     );
 

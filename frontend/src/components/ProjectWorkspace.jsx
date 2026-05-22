@@ -456,7 +456,7 @@ const ProjectWorkspace = () => {
 
     if (accepted) {
       try {
-        await fetchWithAuth(`${BACKEND_URL}/api/v1/projects/${projectId}/collaborators`, {
+        await fetchWithAuth(`${BACKEND_URL}/api/v1/project/${projectId}/collaborators`, {
           method: 'POST',
           body: JSON.stringify({ userId: joinRequest.user._id })
         });
