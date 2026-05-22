@@ -50,12 +50,13 @@ const registerUser = asyncHandler(async (req, res) => {
     user.emailVerificationExpiry = tokenExpiry;
     await user.save({ validateBeforeSave: false });
 
+    const backendUrl = process.env.NODE_ENV === "production" ? `https://${req.get('host')}` : `${req.protocol}://${req.get('host')}`;
     sendEmail({
         email: user?.email,
         subject: "Email Verification",
         mailgenContent: emailVerificationMailgenContent(
             user.username,
-            `${req.protocol}://${req.get('host')}/api/v1/users/verify-email/${unHashedToken}`
+            `${backendUrl}/api/v1/users/verify-email/${unHashedToken}`
         ),
     }).catch(console.error);
     const createdUser = await User.findById(user._id).select(
@@ -161,16 +162,8 @@ const verifyEmail = asyncHandler(async (req, res) => {
     user.emailVerificationExpiry = undefined;
     user.isEmailVerified = true;
     await user.save({ validateBeforeSave: false });
-    return res
-        .status(200)
-        .json(
-            new ApiResponse(
-                200, {
-                isEmailVerified: true
-            },
-                "Email is verified."
-            )
-        );
+    const frontendUrl = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',')[0] : 'http://localhost:5173';
+    return res.redirect(`${frontendUrl}/login?verified=true`);
 });
 
 const resendEmailVerification = asyncHandler(async (req, res) => {
@@ -186,12 +179,13 @@ const resendEmailVerification = asyncHandler(async (req, res) => {
     user.emailVerificationExpiry = tokenExpiry;
     await user.save({ validateBeforeSave: false });
 
+    const backendUrl = process.env.NODE_ENV === "production" ? `https://${req.get('host')}` : `${req.protocol}://${req.get('host')}`;
     await sendEmail({
         email: user?.email,
         subject: "Email Verification",
         mailgenContent: emailVerificationMailgenContent(
             user.username,
-            `${req.protocol}://${req.get('host')}/api/v1/users/verify-email/${unHashedToken}`
+            `${backendUrl}/api/v1/users/verify-email/${unHashedToken}`
         ),
     });
     return res
@@ -253,12 +247,14 @@ const forgotPasswordRequest = asyncHandler(async (req, res) => {
 
     await user.save({ validateBeforeSave: false })
 
+    const frontendUrl = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',')[0] : 'http://localhost:5173';
+    
     await sendEmail({
         email: user?.email,
         subject: "Password Reset Request",
         mailgenContent: forgotPasswordMailgenContent(
             user.username,
-            `${process.env.FORGOT_PASSWORD_REDIRECT_URL}/${unHashedToken}`,
+            `${frontendUrl}/reset-password/${unHashedToken}`
         ),
     })
     return res
