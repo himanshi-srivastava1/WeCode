@@ -24,12 +24,14 @@ import authRouter from "./routes/auth.routes.js";
 import oauthRouter from "./routes/oauth.routes.js";
 import profileRouter from "./routes/profile.routes.js";
 import projectRouter from "./routes/project.routes.js";
+import aiRouter from "./routes/ai.routes.js";
 
 app.use("/api/v1/healthcheck", healthCheckRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/oauth", oauthRouter);
 app.use("/api/v1/profile", profileRouter);
 app.use("/api/v1/project", projectRouter);
+app.use("/api/v1/ai", aiRouter);
 
 app.get('/', (req, res) => {
     res.send("HEllo world");

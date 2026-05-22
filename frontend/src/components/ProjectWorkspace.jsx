@@ -6,7 +6,7 @@ import { getWebContainer } from '@/lib/webcontainer.js';
 import Editor from '@monaco-editor/react';
 import {
   Folder, FolderOpen, File as FileIcon, ChevronRight, ChevronDown,
-  Save, ArrowLeft, Code, Play, X, Copy, MessageSquare, Send, Settings
+  Save, ArrowLeft, Code, Play, X, Copy, MessageSquare, Send, Settings, Globe, ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
@@ -28,6 +28,9 @@ import {
   AlertDialogHeader, AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { toast } from 'sonner';
+import { ToggleAIButton } from './ToggleAIButton';
+import { useAISuggestion } from '@/hooks/useAISuggestion';
+import { emmetHTML, emmetJSX } from 'emmet-monaco-es';
 
 const FileExplorerNode = ({ name, node, path, activeFilePath, onFileClick, expandedFolders, toggleFolder, selectedNodePath, onNodeSelect, onRenameNode, onDeleteNode }) => {
   const isDir = node.type === 'directory';
@@ -182,11 +185,20 @@ const ProjectWorkspace = () => {
   const terminalRef = useRef(null);
   const { theme: appTheme } = useTheme();
 
+  // AI State
+  const [isAIEnabled, setIsAIEnabled] = useState(false);
+  const { getCompletion, getSuggestion, isGenerating } = useAISuggestion();
+  const inlineProviderRef = useRef(null);
+  const [showAskAIModal, setShowAskAIModal] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [selectedCodeRange, setSelectedCodeRange] = useState(null);
+
   // Yjs Refs
   const yDocRef = useRef(null);
   const providerRef = useRef(null);
   const bindingRef = useRef(null);
   const monacoEditorRef = useRef(null);
+  const monacoInstanceRef = useRef(null);
 
   useEffect(() => {
     if (!projectId || !user) return;
@@ -307,10 +319,119 @@ const ProjectWorkspace = () => {
 
   const handleEditorDidMount = (editor, monaco) => {
     monacoEditorRef.current = editor;
+    monacoInstanceRef.current = monaco;
+
+    // Enable JSX syntax highlighting
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: true,
+      noSyntaxValidation: false,
+    });
+    monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+      target: monaco.languages.typescript.ScriptTarget.Latest,
+      allowNonTsExtensions: true,
+      jsx: monaco.languages.typescript.JsxEmit.React,
+      reactNamespace: "React",
+      allowJs: true,
+    });
+
+    // Enable Emmet for HTML and JSX
+    try {
+      emmetHTML(monaco, ['html']);
+      emmetJSX(monaco, ['javascript', 'typescript']);
+    } catch (e) {
+      console.error("Emmet initialization error:", e);
+    }
+
     if (activeFilePath) {
       bindEditor(activeFilePath, editor);
     }
+    
+    // Register action for Ask AI
+    editor.addAction({
+      id: 'ask-ai-refactor',
+      label: 'Ask AI to Edit/Explain...',
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 1.5,
+      run: (ed) => {
+        const selection = ed.getSelection();
+        const model = ed.getModel();
+        if (selection && !selection.isEmpty()) {
+          setSelectedCodeRange(selection);
+          setShowAskAIModal(true);
+        } else {
+          toast.info("Please highlight some code first.");
+        }
+      }
+    });
   };
+
+  useEffect(() => {
+    if (!monacoInstanceRef.current) return;
+    const monaco = monacoInstanceRef.current;
+
+    // Clean up previous provider if it exists
+    if (inlineProviderRef.current) {
+      inlineProviderRef.current.dispose();
+      inlineProviderRef.current = null;
+    }
+
+    let completionDebounceTimer;
+
+    if (isAIEnabled) {
+      inlineProviderRef.current = monaco.languages.registerInlineCompletionsProvider('*', {
+        provideInlineCompletions: (model, position, context, token) => {
+          return new Promise((resolve) => {
+            if (completionDebounceTimer) {
+              clearTimeout(completionDebounceTimer);
+            }
+
+            // Set a 1-second debounce timer to avoid hitting API rate limits
+            completionDebounceTimer = setTimeout(async () => {
+              if (token.isCancellationRequested) {
+                return resolve({ items: [] });
+              }
+
+              const prefix = model.getValueInRange({
+                startLineNumber: 1,
+                startColumn: 1,
+                endLineNumber: position.lineNumber,
+                endColumn: position.column
+              });
+              
+              const suffix = model.getValueInRange({
+                startLineNumber: position.lineNumber,
+                startColumn: position.column,
+                endLineNumber: model.getLineCount(),
+                endColumn: model.getLineMaxColumn(model.getLineCount())
+              });
+
+              const language = model.getLanguageId();
+              const completion = await getCompletion(prefix, suffix, language);
+              
+              if (token.isCancellationRequested || !completion) {
+                return resolve({ items: [] });
+              }
+
+              resolve({
+                items: [{
+                  insertText: completion,
+                  range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column)
+                }]
+              });
+            }, 1000);
+          });
+        },
+        freeInlineCompletions: () => {},
+        disposeInlineCompletions: () => {}
+      });
+    }
+
+    return () => {
+      if (inlineProviderRef.current) {
+        inlineProviderRef.current.dispose();
+      }
+    };
+  }, [isAIEnabled, getCompletion]);
 
   useEffect(() => {
     if (monacoEditorRef.current && activeFilePath) {
@@ -832,7 +953,7 @@ const ProjectWorkspace = () => {
           runInTerminal('npm install && npm run dev');
         } else if (isReact && hasIndexHtml) {
           // React project — scaffold Vite
-          pkg.scripts = { ...scripts, dev: 'vite', build: 'vite build' };
+          pkg.scripts = { ...scripts, dev: 'vite --host', build: 'vite build' };
           if (!pkg.devDependencies) pkg.devDependencies = {};
           pkg.devDependencies['vite'] = '^5.0.0';
           pkg.devDependencies['@vitejs/plugin-react'] = '^4.2.0';
@@ -856,7 +977,7 @@ const ProjectWorkspace = () => {
           runInTerminal('npm install && npm run dev');
         } else if (isVue && hasIndexHtml) {
           // Vue project — scaffold Vite
-          pkg.scripts = { ...scripts, dev: 'vite', build: 'vite build' };
+          pkg.scripts = { ...scripts, dev: 'vite --host', build: 'vite build' };
           if (!pkg.devDependencies) pkg.devDependencies = {};
           pkg.devDependencies['vite'] = '^5.0.0';
           pkg.devDependencies['@vitejs/plugin-vue'] = '^4.5.0';
@@ -883,7 +1004,15 @@ const ProjectWorkspace = () => {
           }
         }
       } else {
-        // No package.json — run the active file or auto-detect index.js
+        // No package.json
+        const hasHtml = await fileExists('index.html') || (activeFilePath && activeFilePath.endsWith('.html'));
+        if (hasHtml) {
+          // Plain HTML/CSS/JS project
+          runInTerminal('npx serve .');
+          return;
+        }
+
+        // Run the active file or auto-detect index.js
         const entryFile = activeFilePath
           || await findEntryFile(['index.js', 'main.js', 'app.js']);
 
@@ -918,8 +1047,8 @@ const ProjectWorkspace = () => {
     else if (fileName.endsWith('.md')) language = "markdown";
 
     else if (fileName.endsWith('.ts')) language = "typescript";
-    else if (fileName.endsWith('.tsx')) language = "typescriptreact";
-    else if (fileName.endsWith('.jsx')) language = "javascriptreact";
+    else if (fileName.endsWith('.tsx')) language = "typescript";
+    else if (fileName.endsWith('.jsx')) language = "javascript";
 
     else if (fileName.endsWith('.vue')) language = "vue";
     else if (fileName.endsWith('.svelte')) language = "svelte";
@@ -1014,13 +1143,15 @@ const ProjectWorkspace = () => {
                   </div>
                 </div>
               ))
-            ) : (
-              <div className="h-7 w-7 rounded-full border-2 border-white dark:border-[#1a2235] bg-blue-500 flex items-center justify-center text-white text-xs font-bold z-10" title="You">
-                Y
-              </div>
-            )}
+            ) : null}
           </div>
-
+          
+          <ToggleAIButton 
+            isAIEnabled={isAIEnabled} 
+            toggleAI={() => setIsAIEnabled(!isAIEnabled)} 
+            className="mr-2 hidden sm:flex"
+          />
+          
           <Button
             variant="outline"
             size="sm"
@@ -1035,6 +1166,18 @@ const ProjectWorkspace = () => {
           <Button size="sm" onClick={runProject} className="h-8 text-xs bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white border-0 shadow-sm">
             <Play className="h-3.5 w-3.5 mr-1.5" /> Run
           </Button>
+
+          {previewUrl && (
+            <Button
+              variant={showPreview ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => setShowPreview(!showPreview)}
+              className="h-8 w-8 text-gray-500 hover:text-blue-500 dark:text-gray-400 transition-colors"
+              title={showPreview ? "Hide Preview" : "Show Preview"}
+            >
+              <Globe className="h-4 w-4 text-blue-500" />
+            </Button>
+          )}
 
           <Button 
             size="icon" 
@@ -1144,7 +1287,7 @@ const ProjectWorkspace = () => {
 
                   {/* Editor Section */}
                   {activeFilePath ? (
-                    <div className="flex-1 relative">
+                    <div className="flex-1 relative min-h-0 overflow-hidden">
                       <Editor
                         height="100%"
                         path={activeFilePath}
@@ -1456,6 +1599,77 @@ const ProjectWorkspace = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Ask AI Modal */}
+      <Dialog open={showAskAIModal} onOpenChange={setShowAskAIModal}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400">
+              Ask AI
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="ai-prompt" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+              How should I modify this code?
+            </Label>
+            <Input
+              id="ai-prompt"
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder="e.g. Add error handling, refactor to be async..."
+              className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white"
+              autoFocus
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter' && aiPrompt.trim() && !isGenerating) {
+                  const ed = monacoEditorRef.current;
+                  if (!ed || !selectedCodeRange) return;
+                  const code = ed.getModel().getValueInRange(selectedCodeRange);
+                  const language = ed.getModel().getLanguageId();
+                  
+                  const suggestion = await getSuggestion(code, aiPrompt, language);
+                  if (suggestion) {
+                    ed.executeEdits("ai-suggestion", [{
+                      range: selectedCodeRange,
+                      text: suggestion,
+                      forceMoveMarkers: true
+                    }]);
+                    setShowAskAIModal(false);
+                    setAiPrompt('');
+                  }
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAskAIModal(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button 
+              disabled={isGenerating || !aiPrompt.trim()}
+              onClick={async () => {
+                  const ed = monacoEditorRef.current;
+                  if (!ed || !selectedCodeRange) return;
+                  const code = ed.getModel().getValueInRange(selectedCodeRange);
+                  const language = ed.getModel().getLanguageId();
+                  
+                  const suggestion = await getSuggestion(code, aiPrompt, language);
+                  if (suggestion) {
+                    ed.executeEdits("ai-suggestion", [{
+                      range: selectedCodeRange,
+                      text: suggestion,
+                      forceMoveMarkers: true
+                    }]);
+                    setShowAskAIModal(false);
+                    setAiPrompt('');
+                  }
+              }}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-md transition-all duration-300"
+            >
+              {isGenerating ? 'Generating...' : 'Apply Suggestion'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
