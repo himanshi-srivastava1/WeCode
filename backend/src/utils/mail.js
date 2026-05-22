@@ -1,6 +1,9 @@
 import Mailgen from "mailgen";
 import nodemailer from "nodemailer";
+import dns from "dns";
 
+// Force Node to prioritize IPv4 over IPv6. This bypasses the Render ENETUNREACH IPv6 bug entirely.
+dns.setDefaultResultOrder('ipv4first');
 const emailVerificationMailgenContent= (username, verificationUrl)=>{
     return {
         body:{
