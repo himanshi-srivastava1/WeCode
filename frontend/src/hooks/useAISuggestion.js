@@ -1,13 +1,14 @@
 import { useState, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/api';
 import { toast } from 'sonner';
+import { BACKEND_URL } from '@/config';
 
 export const useAISuggestion = () => {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const getCompletion = useCallback(async (prefix, suffix, language) => {
     try {
-      const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/ai/code-completion`, {
+      const res = await fetchWithAuth(`${BACKEND_URL}/api/v1/ai/code-completion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prefix, suffix, language })
@@ -26,7 +27,7 @@ export const useAISuggestion = () => {
   const getSuggestion = useCallback(async (code, prompt, language) => {
     setIsGenerating(true);
     try {
-      const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/ai/code-suggestion`, {
+      const res = await fetchWithAuth(`${BACKEND_URL}/api/v1/ai/code-suggestion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, prompt, language })

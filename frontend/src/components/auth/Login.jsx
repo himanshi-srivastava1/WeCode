@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { BACKEND_URL } from '@/config';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -19,7 +20,7 @@ const Login = () => {
     setError('');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/auth/login`, {
+      const response = await fetch(`${BACKEND_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -54,11 +55,11 @@ const Login = () => {
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/oauth/google`;
+    window.location.href = `${BACKEND_URL}/api/v1/oauth/google`;
   };
 
   const handleGitHubLogin = () => {
-    window.location.href = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/oauth/github`;
+    window.location.href = `${BACKEND_URL}/api/v1/oauth/github`;
   };
 
   return (

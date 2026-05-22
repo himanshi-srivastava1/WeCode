@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { BACKEND_URL } from '@/config';
 
 const ThemeContext = createContext();
 
@@ -38,7 +39,7 @@ export const ThemeProvider = ({ children }) => {
     const token = localStorage.getItem("accessToken");
     if (token) {
       try {
-        await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/auth/update-theme`, {
+        await fetch(`${BACKEND_URL}/api/v1/auth/update-theme`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

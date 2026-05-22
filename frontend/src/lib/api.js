@@ -1,3 +1,5 @@
+import { BACKEND_URL } from '../config';
+
 export const fetchWithAuth = async (url, options = {}) => {
   let token = localStorage.getItem('accessToken');
   
@@ -20,7 +22,7 @@ export const fetchWithAuth = async (url, options = {}) => {
     const refreshToken = localStorage.getItem('refreshToken');
     if (refreshToken) {
       try {
-        const refreshResponse = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/auth/refresh-token`, {
+        const refreshResponse = await fetch(`${BACKEND_URL}/api/v1/auth/refresh-token`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

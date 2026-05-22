@@ -11,7 +11,10 @@ app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
 app.use(cookieParser());
 app.use(cors({
-    origin: process.env.CORS_ORIGIN?.split(",") || "http://localhost:5173",
+    origin: [
+        "http://localhost:5173",
+        ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : [])
+    ],
     credentials: true,
     methods: ["GET", 'POST', "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type"],

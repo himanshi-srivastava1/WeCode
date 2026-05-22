@@ -95,3 +95,23 @@ CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 3. Teammates can request to join via their dashboard.
 4. Accept their request, and they will immediately appear in your workspace.
 5. Start coding together!
+
+## 🌍 Deployment (Render + Vercel)
+
+The application is optimized for a split deployment architecture: Backend on Render and Frontend on Vercel.
+
+### 1. Deploying the Backend (Render)
+1. Create a new **Web Service** on [Render](https://render.com/).
+2. Connect your GitHub repository and set the Root Directory to `backend`.
+3. Build Command: `npm install`
+4. Start Command: `npm start`
+5. Add all your Environment Variables from `.env`.
+   - **Crucial**: Set `CORS_ORIGIN` to your Vercel frontend URL (e.g., `https://my-frontend.vercel.app`).
+
+### 2. Deploying the Frontend (Vercel)
+1. Create a new Project on [Vercel](https://vercel.com/).
+2. Connect your GitHub repository and set the Root Directory to `frontend`.
+3. Vercel will automatically detect **Vite** and configure the Build Command (`npm run build`) and Output Directory (`dist`).
+4. Add the following Environment Variable:
+   - `VITE_BACKEND_URL`: Set this to your Render backend URL (e.g., `https://my-backend.onrender.com`).
+5. Deploy! Client-side routing is automatically handled by the `vercel.json` included in the frontend directory.

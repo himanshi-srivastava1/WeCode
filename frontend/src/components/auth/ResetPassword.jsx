@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { BACKEND_URL } from '@/config';
 
 const ResetPassword = () => {
   const { token } = useParams();
@@ -29,7 +30,7 @@ const ResetPassword = () => {
     }
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/auth/reset-forgot-password/${token}`, {
+      const response = await fetch(`${BACKEND_URL}/api/v1/auth/reset-forgot-password/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newPassword }),

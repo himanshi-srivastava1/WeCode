@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { BACKEND_URL } from '@/config';
 import { ArrowLeft } from 'lucide-react';
 
 const ForgotPassword = () => {
@@ -20,7 +21,7 @@ const ForgotPassword = () => {
     setSuccess('');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/auth/forgot-password`, {
+      const response = await fetch(`${BACKEND_URL}/api/v1/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
