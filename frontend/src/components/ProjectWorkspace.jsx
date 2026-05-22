@@ -430,7 +430,7 @@ const ProjectWorkspace = () => {
                   range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column)
                 }]
               });
-            }, 2500); // Increased from 1000ms to 2500ms to prevent hitting Google Gemini free-tier rate limits
+            }, 4000); // Increased to 4000ms (4 seconds) to guarantee staying under Google's 15 Requests Per Minute free-tier limit
           });
         },
         freeInlineCompletions: () => {},
