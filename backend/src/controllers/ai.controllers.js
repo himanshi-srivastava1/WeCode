@@ -20,8 +20,8 @@ export const generateCodeCompletion = asyncHandler(async (req, res) => {
     }
 
     const genAI = getGenAI();
-    // Using 1.5 flash because it has more generous free-tier rate limits than 2.5
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Using gemini-2.5-flash as 1.5 has been completely removed from the API in 2026
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `
 You are an expert AI code completion engine. Your task is to provide the next logical lines of code to complete the user's snippet.
@@ -63,7 +63,7 @@ export const generateCodeSuggestion = asyncHandler(async (req, res) => {
     }
 
     const genAI = getGenAI();
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `
 You are an expert AI pair programmer.
