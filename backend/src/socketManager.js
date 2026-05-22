@@ -45,8 +45,8 @@ export const initializeSocket = (io) => {
                 }
 
                 // Emit to the owner in the project room using the actual MongoDB _id
-                io.to(`project_${project._id}`).emit('join-request', {
-                    projectId: project._id,
+                io.to(`project_${project._id.toString()}`).emit('join-request', {
+                    projectId: project._id.toString(),
                     user,
                     socketId: socket.id // We pass the joiner's socket ID to reply directly
                 });
