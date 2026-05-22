@@ -29,7 +29,6 @@
     "multer": "^1.4.5-lts.1",
     "nodemon": "^3.1.14",
     "passport": "latest",
-    "passport-github2": "^0.1.12",
     "passport-google-oauth20": "^2.0.0",
     "prettier": "^3.8.1",
     "socket.io": "^4.8.3",

@@ -320,12 +320,25 @@ const ProjectWorkspace = () => {
     monacoEditorRef.current = editor;
     monacoInstanceRef.current = monaco;
 
-    // Enable JSX syntax highlighting
+    // Enable JSX syntax highlighting for JavaScript
     monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: true,
       noSyntaxValidation: false,
     });
     monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+      target: monaco.languages.typescript.ScriptTarget.Latest,
+      allowNonTsExtensions: true,
+      jsx: monaco.languages.typescript.JsxEmit.React,
+      reactNamespace: "React",
+      allowJs: true,
+    });
+
+    // Enable JSX syntax highlighting for TypeScript
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: true,
+      noSyntaxValidation: false,
+    });
+    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
       target: monaco.languages.typescript.ScriptTarget.Latest,
       allowNonTsExtensions: true,
       jsx: monaco.languages.typescript.JsxEmit.React,

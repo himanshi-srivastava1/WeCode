@@ -214,7 +214,7 @@ const AllProjects = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
               </div>
             ) : projects.length > 0 ? (
-              <div className="overflow-x-auto">
+              <div className="overflow-visible">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5">

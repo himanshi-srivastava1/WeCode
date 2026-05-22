@@ -1,6 +1,5 @@
 import passport from 'passport';
 import GoogleStrategy from 'passport-google-oauth20';
-import GitHubStrategy from 'passport-github2';
 import crypto from 'crypto';
 import { User } from '../models/user.models.js';
 
@@ -8,7 +7,8 @@ import { User } from '../models/user.models.js';
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "/api/v1/oauth/google/callback"
+    callbackURL: "/api/v1/oauth/google/callback",
+    proxy: true
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
@@ -47,54 +47,7 @@ passport.use(new GoogleStrategy({
   }
 ));
 
-// GitHub OAuth Strategy
-passport.use(new GitHubStrategy({
-    clientID: process.env.GITHUB_CLIENT_ID,
-    clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    callbackURL: "/api/v1/oauth/github/callback"
-  },
-  async (accessToken, refreshToken, profile, done) => {
-    try {
-      let user = await User.findOne({ githubId: profile.id });
-      
-      if (user) {
-        return done(null, user);
-      } else {
-        // Check if user exists with same email
-        const existingUser = await User.findOne({ email: profile.emails[0].value });
-        
-        if (existingUser) {
-          // Link GitHub account to existing user
-          existingUser.githubId = profile.id;
-          existingUser.avatar = profile.photos[0].value;
-          await existingUser.save();
-          return done(null, existingUser);
-        }
-        
-        // Create new user
-        const displayName = profile.displayName || profile.username || '';
-        const nameParts = displayName.split(' ');
-        const firstName = nameParts[0] || 'User';
-        const lastName = nameParts.slice(1).join(' ');
 
-        user = new User({
-          githubId: profile.id,
-          username: (profile.username ? profile.username.toLowerCase() : profile.emails[0].value.split('@')[0]) + crypto.randomBytes(3).toString('hex'),
-          email: profile.emails[0].value,
-          firstName: firstName,
-          lastName: lastName,
-          avatar: profile.photos[0].value,
-          isEmailVerified: true
-        });
-        
-        await user.save();
-        return done(null, user);
-      }
-    } catch (error) {
-      return done(error, null);
-    }
-  }
-));
 
 // Serialize user for session
 passport.serializeUser((user, done) => {
