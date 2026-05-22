@@ -14,6 +14,7 @@ export const initializeSocket = (io) => {
             socket.join(`project_${projectId}`);
             socket.projectId = projectId;
             socket.userId = user._id;
+            socket.user = user;
 
             console.log(`User ${user.username} joined room project_${projectId}`);
 
