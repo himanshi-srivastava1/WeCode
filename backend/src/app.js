@@ -6,6 +6,9 @@ import "./config/passport.js";
 
 const app = express();
 
+// Trust Render's proxy to fix Passport HTTP/HTTPS callback issues
+app.set("trust proxy", 1);
+
 app.use(express.json({ limit: "32kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
