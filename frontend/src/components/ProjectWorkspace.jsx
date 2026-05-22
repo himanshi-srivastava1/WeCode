@@ -22,6 +22,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator } from "@/components/ui/context-menu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle
+} from "@/components/ui/alert-dialog";
+import { toast } from 'sonner';
 
 const FileExplorerNode = ({ name, node, path, activeFilePath, onFileClick, expandedFolders, toggleFolder, selectedNodePath, onNodeSelect, onRenameNode, onDeleteNode }) => {
   const isDir = node.type === 'directory';
@@ -168,6 +174,9 @@ const ProjectWorkspace = () => {
   const [chatInput, setChatInput] = useState('');
   const [awarenessStates, setAwarenessStates] = useState(new Map());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isLeaveAlertOpen, setIsLeaveAlertOpen] = useState(false);
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
+  const [nodeToDelete, setNodeToDelete] = useState(null);
   const chatEndRef = useRef(null);
   const serverReadyRegistered = useRef(false);
   const terminalRef = useRef(null);
@@ -452,20 +461,18 @@ const ProjectWorkspace = () => {
 
       const data = await response.json();
       if (!data.success) {
-        alert(data.message || 'Failed to sync tabs');
+        toast.error(data.message || 'Failed to sync tabs');
       }
       return data.data;
     } catch (error) {
       console.error("Tab Sync Error:", error);
-      alert("Failed to sync tabs");
+      toast.error("Failed to sync tabs");
     }
   };
 
   const handleBackClick = () => {
     if (hasUnsavedChanges) {
-      if (window.confirm("You have unsaved changes. Do you really want to leave without saving?")) {
-        navigate('/dashboard');
-      }
+      setIsLeaveAlertOpen(true);
     } else {
       navigate('/dashboard');
     }
@@ -569,7 +576,7 @@ const ProjectWorkspace = () => {
     if (!parentNode.children) parentNode.children = {};
 
     if (parentNode.children[newItemName]) {
-      alert(`A file or folder named ${newItemName} already exists here.`);
+      toast.error(`A file or folder named ${newItemName} already exists here.`);
       return;
     }
 
@@ -610,7 +617,7 @@ const ProjectWorkspace = () => {
       socket.emit('file-tree-updated', newTree);
     } catch (error) {
       console.error('Failed to create node in WebContainer', error);
-      alert('Error creating a file in the  virtual file system.');
+      toast.error('Error creating a file in the virtual file system.');
     }
 
   };
@@ -639,7 +646,7 @@ const ProjectWorkspace = () => {
     }
 
     if (current.children[renameNewName]) {
-      alert(`A file or folder named ${renameNewName} already exists here.`);
+      toast.error(`A file or folder named ${renameNewName} already exists here.`);
       return;
     }
 
@@ -676,34 +683,42 @@ const ProjectWorkspace = () => {
   };
 
   const handleDeleteNode = (path) => {
-    if (window.confirm(`Are you sure you want to delete ${path.split('/').pop()}?`)) {
-      const newTree = JSON.parse(JSON.stringify(fileTree));
-      const parts = path.split('/');
-      let current = { children: newTree };
-      for (let i = 0; i < parts.length - 1; i++) {
-        current = current.children[parts[i]];
-      }
-      delete current.children[parts[parts.length - 1]];
-      setFileTree(newTree);
-      setHasUnsavedChanges(true);
+    setNodeToDelete(path);
+    setIsDeleteAlertOpen(true);
+  };
 
-      const updatedOpenedFiles = openedFiles.filter(
-        (openedPath) => !openedPath.startsWith(path)
-      );
-
-      setOpenedFiles(updatedOpenedFiles);
-      syncOpenedFiles(projectId, updatedOpenedFiles);
-
-      if (activeFilePath && activeFilePath.startsWith(path)) {
-        setActiveFilePath(null);
-      }
-      if (selectedNodePath && selectedNodePath.startsWith(path)) {
-        setSelectedNodePath('');
-      }
-      
-      // Sync with others
-      socket.emit('file-tree-updated', newTree);
+  const confirmDeleteNode = () => {
+    if (!nodeToDelete) return;
+    const path = nodeToDelete;
+    
+    const newTree = JSON.parse(JSON.stringify(fileTree));
+    const parts = path.split('/');
+    let current = { children: newTree };
+    for (let i = 0; i < parts.length - 1; i++) {
+      current = current.children[parts[i]];
     }
+    delete current.children[parts[parts.length - 1]];
+    setFileTree(newTree);
+    setHasUnsavedChanges(true);
+
+    const updatedOpenedFiles = openedFiles.filter(
+      (openedPath) => !openedPath.startsWith(path)
+    );
+
+    setOpenedFiles(updatedOpenedFiles);
+    syncOpenedFiles(projectId, updatedOpenedFiles);
+
+    if (activeFilePath && activeFilePath.startsWith(path)) {
+      setActiveFilePath(null);
+    }
+    if (selectedNodePath && selectedNodePath.startsWith(path)) {
+      setSelectedNodePath('');
+    }
+    
+    socket.emit('file-tree-updated', newTree);
+    
+    setIsDeleteAlertOpen(false);
+    setNodeToDelete(null);
   };
 
   const handleSave = async () => {
@@ -718,11 +733,11 @@ const ProjectWorkspace = () => {
       if (data.success) {
         setHasUnsavedChanges(false);
       } else {
-        alert("Failed to save project files.");
+        toast.error("Failed to save project files.");
       }
     } catch (err) {
       console.error("Error saving files", err);
-      alert("Error saving project files.");
+      toast.error("Error saving project files.");
     } finally {
       setIsSaving(false);
     }
@@ -864,7 +879,7 @@ const ProjectWorkspace = () => {
           } else if (activeFilePath && (activeFilePath.endsWith('.js') || activeFilePath.endsWith('.mjs'))) {
             runInTerminal(`npm install && node ${activeFilePath}`);
           } else {
-            alert('No runnable script or entry file found. Add a "dev" or "start" script to your package.json.');
+            toast.error('No runnable script or entry file found. Add a "dev" or "start" script to your package.json.');
           }
         }
       } else {
@@ -875,7 +890,7 @@ const ProjectWorkspace = () => {
         if (entryFile) {
           runInTerminal(`node ${entryFile}`);
         } else {
-          alert('Please select a file to run');
+          toast.error('Please select a file to run');
         }
       }
     } catch (error) {
@@ -979,7 +994,7 @@ const ProjectWorkspace = () => {
               <div className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Online
                 <span className="mx-1.5 w-px h-2.5 bg-gray-300 dark:bg-white/20"></span>
-                <span className="flex items-center gap-1 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 transition-colors" onClick={() => { navigator.clipboard.writeText(projectId); alert('Project ID copied!') }} title="Copy Project ID">
+                <span className="flex items-center gap-1 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 transition-colors" onClick={() => { navigator.clipboard.writeText(projectId); toast.success('Project ID copied!') }} title="Copy Project ID">
                   ID: <span className="font-mono bg-gray-100 dark:bg-white/10 px-1 rounded text-[9px]">{projectId}</span> <Copy className="w-3 h-3" />
                 </span>
               </div>
@@ -1411,6 +1426,37 @@ const ProjectWorkspace = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isLeaveAlertOpen} onOpenChange={setIsLeaveAlertOpen}>
+        <AlertDialogContent className="bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-500 dark:text-gray-400">
+              You have unsaved changes in your workspace. Do you really want to leave without saving?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => navigate('/dashboard')} className="bg-red-600 hover:bg-red-700 text-white border-0 shadow-lg transition-all duration-300">Leave without saving</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
+        <AlertDialogContent className="bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-500 dark:text-gray-400">
+              This action cannot be undone. This will permanently delete <b>{nodeToDelete ? nodeToDelete.split('/').pop() : ''}</b> from the project workspace.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10" onClick={() => setNodeToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteNode} className="bg-red-600 hover:bg-red-700 text-white border-0 shadow-lg transition-all duration-300">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 };

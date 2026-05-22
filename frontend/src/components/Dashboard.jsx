@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { fetchWithAuth } from '@/lib/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { socket } from '@/socket.js';
+import { toast } from 'sonner';
 import Footer from '@/components/ui/Footer';
 
 const ReactIcon = ({ className }) => (
@@ -87,9 +88,20 @@ const Dashboard = () => {
   const [projectToDelete, setProjectToDelete] = useState(null);
   const navigate = useNavigate();
 
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [changePasswordForm, setChangePasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+  const [changePasswordError, setChangePasswordError] = useState('');
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinSessionId, setJoinSessionId] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importRepoUrl, setImportRepoUrl] = useState('');
+  const [importTemplate, setImportTemplate] = useState('react');
+  const [isImporting, setIsImporting] = useState(false);
 
   const handleJoinSession = () => {
     if (!joinSessionId.trim()) return;
@@ -108,7 +120,7 @@ const Dashboard = () => {
               });
             navigate(`/project/${data.projectId}`);
         } else {
-            alert(data.reason || 'Request declined or failed.');
+            toast.error(data.reason || 'Request declined or failed.');
             socket.disconnect();
         }
     };
@@ -119,6 +131,32 @@ const Dashboard = () => {
         projectId: joinSessionId.trim(),
         user: { _id: user._id, username: user.username, avatar: user.avatar }
     });
+  };
+
+  const handleImportRepo = async () => {
+    if (!importRepoUrl.trim()) return;
+    setIsImporting(true);
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/project/import-github`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoUrl: importRepoUrl, template: importTemplate })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsImportModalOpen(false);
+        setImportRepoUrl('');
+        setProjects(prev => [data.data, ...prev]);
+        navigate(`/project/${data.data._id}`);
+      } else {
+        toast.error(data.message || 'Failed to import repository.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('An error occurred while importing the repository.');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const filteredTemplates = templatesData.filter(t => {
@@ -224,6 +262,43 @@ const Dashboard = () => {
     }
   };
 
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (changePasswordForm.newPassword !== changePasswordForm.confirmPassword) {
+      setChangePasswordError("New passwords don't match.");
+      return;
+    }
+    setIsChangingPassword(true);
+    setChangePasswordError('');
+    setChangePasswordSuccess('');
+
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'}/api/v1/auth/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          oldPassword: changePasswordForm.oldPassword,
+          newPassword: changePasswordForm.newPassword
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setChangePasswordSuccess('Password changed successfully.');
+        setChangePasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+        setTimeout(() => {
+          setIsChangePasswordModalOpen(false);
+          setChangePasswordSuccess('');
+        }, 2000);
+      } else {
+        setChangePasswordError(data.message || 'Failed to change password.');
+      }
+    } catch (err) {
+      setChangePasswordError('Network error. Please try again.');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const handleStarProject = async (e, projectId, isCurrentlyStarred) => {
     e.stopPropagation();
 
@@ -270,11 +345,11 @@ const Dashboard = () => {
         setProjects(prev => prev.map(p => p._id === editingProjectId ? { ...p, description: editingDescription } : p));
         setIsEditDescModalOpen(false);
       } else {
-        alert(data.message || 'Failed to update description');
+        toast.error(data.message || 'Failed to update description');
       }
     } catch (error) {
       console.error('Error updating description', error);
-      alert('An error occurred');
+      toast.error('An error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -292,11 +367,11 @@ const Dashboard = () => {
       if (data.success) {
         setProjects(prev => [data.data, ...prev]);
       } else {
-        alert(data.message || 'Failed to duplicate project');
+        toast.error(data.message || 'Failed to duplicate project');
       }
     } catch (err) {
       console.error("Error duplicating project", err);
-      alert('An error occurred');
+      toast.error('An error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -314,11 +389,11 @@ const Dashboard = () => {
         setIsDeleteDialogOpen(false);
         setProjectToDelete(null);
       } else {
-        alert(data.message || 'Failed to delete project');
+        toast.error(data.message || 'Failed to delete project');
       }
     } catch (err) {
       console.error("Error deleting project", err);
-      alert('An error occurred');
+      toast.error('An error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -339,11 +414,11 @@ const Dashboard = () => {
         setProjects(prev => prev.map(p => p._id === editingProjectId ? { ...p, title: editingTitle } : p));
         setIsEditTitleModalOpen(false);
       } else {
-        alert(data.message || 'Failed to update title');
+        toast.error(data.message || 'Failed to update title');
       }
     } catch (error) {
       console.error('Error updating title', error);
-      alert('An error occurred');
+      toast.error('An error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -478,7 +553,7 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          <Card className="bg-white dark:bg-white/5 backdrop-blur-xl border-gray-200 dark:border-white/10 hover:border-gray-400 dark:hover:border-gray-400/50 hover:bg-gray-50 dark:hover:bg-white/10 transition-all duration-500 cursor-pointer group shadow-sm dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.36)]">
+          <Card onClick={() => { setIsImportModalOpen(true); setImportRepoUrl(''); }} className="bg-white dark:bg-white/5 backdrop-blur-xl border-gray-200 dark:border-white/10 hover:border-gray-400 dark:hover:border-gray-400/50 hover:bg-gray-50 dark:hover:bg-white/10 transition-all duration-500 cursor-pointer group shadow-sm dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.36)]">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center text-xl text-gray-900 dark:text-white group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">
                 <div className="bg-gray-500/10 p-2 rounded-lg mr-3 group-hover:bg-gray-500/20 transition-colors">
@@ -491,7 +566,7 @@ const Dashboard = () => {
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
                 Connect your GitHub account to import an existing repository and start collaborating immediately.
               </p>
-              <Button variant="outline" className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/20 text-gray-700 dark:text-gray-200 transition-all duration-300">
+              <Button onClick={(e) => { e.stopPropagation(); setIsImportModalOpen(true); setImportRepoUrl(''); }} variant="outline" className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/20 text-gray-700 dark:text-gray-200 transition-all duration-300">
                 Import Repository
               </Button>
             </CardContent>
@@ -798,11 +873,11 @@ const Dashboard = () => {
                       setProjects(prev => [data.data, ...prev]);
                       setIsCreateModalOpen(false);
                     } else {
-                      alert(data.message || 'Failed to create project');
+                      toast.error(data.message || 'Failed to create project');
                     }
                   } catch (err) {
                     console.error("Error creating project", err);
-                    alert('An error occurred while creating the project');
+                    toast.error('An error occurred while creating the project');
                   } finally {
                     setIsSubmitting(false);
                   }
@@ -989,6 +1064,16 @@ const Dashboard = () => {
                     {isSavingProfile ? 'Saving...' : 'Save'}
                   </Button>
                 </div>
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => { setIsChangePasswordModalOpen(true); setChangePasswordError(''); setChangePasswordSuccess(''); }}
+                    className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                  >
+                    Change Password
+                  </Button>
+                </div>
               </form>
             ) : (
               <>
@@ -1060,6 +1145,57 @@ const Dashboard = () => {
               className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-sm"
             >
               {isJoining ? 'Requesting to Join...' : 'Join Workspace'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import GitHub Repo Modal */}
+      <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold tracking-tight">Import from GitHub</DialogTitle>
+            <DialogDescription className="text-gray-500 dark:text-gray-400">
+              Paste the URL of a public GitHub repository to clone it into a new workspace.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-2">
+              <Label htmlFor="repoUrl" className="text-sm font-medium text-gray-700 dark:text-gray-300">Repository URL</Label>
+              <Input
+                id="repoUrl"
+                value={importRepoUrl}
+                onChange={(e) => setImportRepoUrl(e.target.value)}
+                placeholder="https://github.com/facebook/react"
+                className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white h-11"
+              />
+            </div>
+            <div className="space-y-2 mt-4">
+              <Label htmlFor="importTemplate" className="text-sm font-medium text-gray-700 dark:text-gray-300">Base Template</Label>
+              <select
+                id="importTemplate"
+                value={importTemplate}
+                onChange={(e) => setImportTemplate(e.target.value)}
+                className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white h-11 rounded-md px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+              >
+                {templatesData.map(t => (
+                  <option key={t.id} value={t.id} className="text-gray-900 dark:text-gray-900">
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsImportModalOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImportRepo}
+              disabled={!importRepoUrl.trim() || isImporting}
+              className="bg-gradient-to-r from-gray-700 to-gray-900 dark:from-gray-600 dark:to-gray-800 hover:from-gray-600 hover:to-gray-800 text-white border-0 shadow-lg transition-all duration-300 min-w-[100px]"
+            >
+              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Import'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1155,6 +1291,71 @@ const Dashboard = () => {
               {isSubmitting ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Modal */}
+      <Dialog open={isChangePasswordModalOpen} onOpenChange={setIsChangePasswordModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151c2e] border-gray-200 dark:border-white/10 text-gray-900 dark:text-white transition-colors duration-300">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-white dark:to-gray-400">Change Password</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              {changePasswordError && (
+                <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded-lg">
+                  {changePasswordError}
+                </div>
+              )}
+              {changePasswordSuccess && (
+                <div className="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 text-green-600 dark:text-green-400 text-sm px-3 py-2 rounded-lg">
+                  {changePasswordSuccess}
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Current Password</Label>
+                <Input
+                  type="password"
+                  value={changePasswordForm.oldPassword}
+                  onChange={(e) => setChangePasswordForm({ ...changePasswordForm, oldPassword: e.target.value })}
+                  required
+                  className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">New Password</Label>
+                <Input
+                  type="password"
+                  value={changePasswordForm.newPassword}
+                  onChange={(e) => setChangePasswordForm({ ...changePasswordForm, newPassword: e.target.value })}
+                  required
+                  className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Confirm New Password</Label>
+                <Input
+                  type="password"
+                  value={changePasswordForm.confirmPassword}
+                  onChange={(e) => setChangePasswordForm({ ...changePasswordForm, confirmPassword: e.target.value })}
+                  required
+                  className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white"
+                />
+              </div>
+              <DialogFooter className="mt-6 pt-2 border-t border-gray-200 dark:border-white/10">
+                <Button type="button" variant="outline" onClick={() => setIsChangePasswordModalOpen(false)} className="bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10">
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isChangingPassword}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0 shadow-sm"
+                >
+                  {isChangingPassword ? 'Changing...' : 'Change Password'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </div>
         </DialogContent>
       </Dialog>
       <Footer />

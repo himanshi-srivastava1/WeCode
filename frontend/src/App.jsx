@@ -4,9 +4,12 @@ import { UserProvider } from './contexts/UserContext';
 import Login from './components/auth/Login';
 import Signup from './components/auth/Signup';
 import AuthCallback from './components/auth/AuthCallback';
+import ForgotPassword from './components/auth/ForgotPassword';
+import ResetPassword from './components/auth/ResetPassword';
 import Dashboard from './components/Dashboard';
 import AllProjects from './components/AllProjects';
 import ProjectWorkspace from './components/ProjectWorkspace';
+import { Toaster } from '@/components/ui/sonner';
 import './App.css';
 
 function App() {
@@ -37,6 +40,14 @@ function App() {
           element={<AuthCallback />}
         />
         <Route
+          path="/forgot-password"
+          element={!isAuthenticated ? <ForgotPassword /> : <Navigate to="/dashboard" />}
+        />
+        <Route
+          path="/reset-password/:token"
+          element={!isAuthenticated ? <ResetPassword /> : <Navigate to="/dashboard" />}
+        />
+        <Route
           path="/dashboard"
           element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />}
         />
@@ -54,6 +65,7 @@ function App() {
         />
       </Routes>
     </Router>
+    <Toaster position="bottom-right" />
     </UserProvider>
   );
 }

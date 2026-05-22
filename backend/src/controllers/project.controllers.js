@@ -327,3 +327,115 @@ export const removeOnlineUserFromProject = asyncHandler(async (req, res, next) =
     return res.status(200).json(new ApiResponse(200, project, "Online user removed successfully"));
 });
 
+export const importGithubRepo = asyncHandler(async (req, res, next) => {
+    const { repoUrl, template = 'react' } = req.body;
+    if (!repoUrl) {
+        throw new ApiError(400, "GitHub repository URL is required");
+    }
+
+    // Parse URL: https://github.com/owner/repo
+    const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+    if (!match) {
+        throw new ApiError(400, "Invalid GitHub repository URL");
+    }
+
+    let owner = match[1];
+    let repo = match[2].replace(/\.git$/, '');
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    const headers = {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'WeCode-App'
+    };
+
+    if (process.env.GITHUB_TOKEN) {
+        headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
+    }
+
+    // 1. Get default branch
+    let defaultBranch = 'main';
+    try {
+        const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+        if (!repoRes.ok) {
+            throw new Error('Repository not found or access denied');
+        }
+        const repoData = await repoRes.json();
+        defaultBranch = repoData.default_branch || 'main';
+    } catch (err) {
+        throw new ApiError(404, "Failed to access GitHub repository. Make sure it's public.");
+    }
+
+    // 2. Get recursive tree
+    const treeRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`, { headers });
+    if (!treeRes.ok) {
+        throw new ApiError(500, "Failed to fetch repository tree");
+    }
+    const treeData = await treeRes.json();
+
+    if (treeData.truncated) {
+        throw new ApiError(400, "Repository is too large to import automatically.");
+    }
+
+    const blobs = treeData.tree.filter(item => item.type === 'blob');
+    
+    // Safety limit: Don't import if > 200 files
+    if (blobs.length > 200) {
+        throw new ApiError(400, `Repository has too many files (${blobs.length}). Maximum allowed is 200.`);
+    }
+
+    // 3. Fetch all blob contents
+    const fileTree = {};
+    const fetchPromises = blobs.map(async (blob) => {
+        try {
+            // Some binary files might fail or be large, we'll try to fetch as text
+            const fileRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${defaultBranch}/${blob.path}`);
+            if (!fileRes.ok) return;
+            const content = await fileRes.text();
+
+            const parts = blob.path.split('/');
+            let currentLevel = fileTree;
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                if (i === parts.length - 1) {
+                    currentLevel[part] = { type: 'file', content: content };
+                } else {
+                    if (!currentLevel[part]) {
+                        currentLevel[part] = { type: 'directory', children: {} };
+                    }
+                    currentLevel = currentLevel[part].children;
+                }
+            }
+        } catch (e) {
+            console.error(`Failed to fetch file: ${blob.path}`, e);
+        }
+    });
+
+    await Promise.all(fetchPromises);
+
+    // If fileTree is empty, something went wrong
+    if (Object.keys(fileTree).length === 0) {
+        throw new ApiError(500, "Failed to extract files from the repository");
+    }
+
+    const projectId = crypto.randomUUID();
+    const project = await Project.create({
+        projectId,
+        title: `${repo}`,
+        description: `Imported from ${repoUrl}`,
+        template: template,
+        fileTree: fileTree,
+        owner: req.user._id,
+        collaborators: [],
+        starredBy: []
+    });
+
+    user.ownedProjects.push(project._id);
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(201).json(new ApiResponse(201, project, "GitHub repository imported successfully"));
+});
+

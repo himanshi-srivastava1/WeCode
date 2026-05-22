@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { fetchWithAuth } from '@/lib/api';
 import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const AllProjects = () => {
   const { user, setUser } = useUser();
@@ -87,11 +88,11 @@ const AllProjects = () => {
       if (data.success) {
         setProjects(prev => [data.data, ...prev]);
       } else {
-        alert(data.message || 'Failed to duplicate project');
+        toast.error(data.message || 'Failed to duplicate project');
       }
     } catch (err) {
       console.error("Error duplicating project", err);
-      alert('An error occurred');
+      toast.error('An error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -109,11 +110,11 @@ const AllProjects = () => {
         setIsDeleteDialogOpen(false);
         setProjectToDelete(null);
       } else {
-        alert(data.message || 'Failed to delete project');
+        toast.error(data.message || 'Failed to delete project');
       }
     } catch (err) {
       console.error("Error deleting project", err);
-      alert('An error occurred');
+      toast.error('An error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -134,11 +135,11 @@ const AllProjects = () => {
         setProjects(prev => prev.map(p => p._id === editingProjectId ? { ...p, title: editingTitle } : p));
         setIsEditTitleModalOpen(false);
       } else {
-        alert(data.message || 'Failed to update title');
+        toast.error(data.message || 'Failed to update title');
       }
     } catch (error) {
       console.error('Error updating title', error);
-      alert('An error occurred');
+      toast.error('An error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -159,11 +160,11 @@ const AllProjects = () => {
         setProjects(prev => prev.map(p => p._id === editingProjectId ? { ...p, description: editingDescription } : p));
         setIsEditDescModalOpen(false);
       } else {
-        alert(data.message || 'Failed to update description');
+        toast.error(data.message || 'Failed to update description');
       }
     } catch (error) {
       console.error('Error updating description', error);
-      alert('An error occurred');
+      toast.error('An error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -241,20 +242,10 @@ const AllProjects = () => {
                             </div>
                           </td>
                           <td className="py-4 px-6 align-middle">
-                            <div className="flex -space-x-1.5 shrink-0 hover:z-10 relative">
-                              <div className="h-6 w-6 rounded-full border-2 border-gray-50 dark:border-[#1a2235] bg-gray-200 flex items-center justify-center relative group z-10 overflow-hidden cursor-pointer" title={`Owner: ${project.owner?.username || user?.username}`}>
+                            <div className="flex shrink-0 relative">
+                              <div className="h-6 w-6 rounded-full border-2 border-gray-50 dark:border-[#1a2235] bg-gray-200 flex items-center justify-center relative group overflow-hidden cursor-pointer" title={`Owner: ${project.owner?.username || user?.username}`}>
                                 <img crossOrigin="anonymous" src={project.owner?.avatar || user?.avatar} alt={project.owner?.username} className="w-full h-full object-cover" />
                               </div>
-                              {project.collaborators?.slice(0, 3).map((collab, i) => (
-                                <div key={collab._id || i} className="h-6 w-6 rounded-full border-2 border-gray-50 dark:border-[#1a2235] bg-gray-200 flex items-center justify-center relative group overflow-hidden cursor-pointer" style={{ zIndex: 9 - i }} title={collab.username}>
-                                  <img crossOrigin="anonymous" src={collab.avatar} alt={collab.username} className="w-full h-full object-cover" />
-                                </div>
-                              ))}
-                              {project.collaborators?.length > 3 && (
-                                <div className="h-6 w-6 rounded-full border-2 border-gray-50 dark:border-[#1a2235] bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-500 dark:text-gray-300 flex items-center justify-center relative group cursor-pointer" style={{ zIndex: 5 }}>
-                                  +{project.collaborators.length - 3}
-                                </div>
-                              )}
                             </div>
                           </td>
                           <td className="py-4 px-6 align-middle">

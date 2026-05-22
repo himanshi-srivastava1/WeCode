@@ -31,14 +31,24 @@ export const initializeSocket = (io) => {
         });
 
         // Joiner requests to join the project
-        socket.on('request-to-join', (data) => {
+        socket.on('request-to-join', async (data) => {
             const { projectId, user } = data;
-            // Emit to the owner in the project room
-            io.to(`project_${projectId}`).emit('join-request', {
-                projectId,
-                user,
-                socketId: socket.id // We pass the joiner's socket ID to reply directly
-            });
+            try {
+                const project = await Project.findOne({ projectId: projectId });
+                if (!project) {
+                    return io.to(socket.id).emit('join-result', { accepted: false, reason: 'Invalid Project ID' });
+                }
+
+                // Emit to the owner in the project room
+                io.to(`project_${projectId}`).emit('join-request', {
+                    projectId,
+                    user,
+                    socketId: socket.id // We pass the joiner's socket ID to reply directly
+                });
+            } catch (err) {
+                console.error("Error in request-to-join:", err);
+                io.to(socket.id).emit('join-result', { accepted: false, reason: 'Server error' });
+            }
         });
 
         // Owner responds to the join request

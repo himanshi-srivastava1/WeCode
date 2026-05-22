@@ -49,11 +49,12 @@ const sendEmail=async (options)=>{
     const emailTextual=mailGenerator.generatePlaintext(options.mailgenContent);
     const emailHtml=mailGenerator.generate(options.mailgenContent);
     const transporter=nodemailer.createTransport({
-        host:process.env.MAILTRAP_SMTP_HOST,
-        port:process.env.MAILTRAP_SMTP_PORT,
+        host:process.env.SMTP_HOST || "smtp.gmail.com",
+        port:process.env.SMTP_PORT || 587,
+        secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
         auth:{
-            user:process.env.MAILTRAP_SMTP_USER,
-            pass:process.env.MAILTRAP_SMTP_PASS,
+            user:process.env.SMTP_USER,
+            pass:process.env.SMTP_PASS,
         }
     });
     const mail={

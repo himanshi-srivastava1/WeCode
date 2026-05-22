@@ -4,7 +4,8 @@ import {
     createProject, getAllProjects, addProjectToStar, removeProjectFromStar, 
     updateProjectDescription, deleteProject, updateProjectTitle, duplicateProject, 
     getProjectById, saveProjectFiles, updateOpenedFilesOfProject,
-    addCollaboratorToProject, addOnlineUserToProject, removeOnlineUserFromProject
+    addCollaboratorToProject, addOnlineUserToProject, removeOnlineUserFromProject,
+    importGithubRepo
 } from "../controllers/project.controllers.js";
 import { projectCreateValidator } from "../validators/index.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -12,6 +13,7 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 const router = Router();
 
 router.route("/create-project").post(verifyJWT, projectCreateValidator(), validate, createProject);
+router.route("/import-github").post(verifyJWT, importGithubRepo);
 router.route("/get-all-projects").get(verifyJWT, getAllProjects);
 router.route("/:projectId/star").post(verifyJWT, addProjectToStar);
 router.route("/:projectId/unstar").delete(verifyJWT, removeProjectFromStar);

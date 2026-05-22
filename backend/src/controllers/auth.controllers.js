@@ -239,7 +239,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
 const forgotPasswordRequest = asyncHandler(async (req, res) => {
     const { email } = req.body;
-    const user = User.findOne({ email });
+    const user = await User.findOne({ email });
     if (!user) {
         throw new ApiError(404, "User does not exist", []);
     }
@@ -255,7 +255,7 @@ const forgotPasswordRequest = asyncHandler(async (req, res) => {
         subject: "Password Reset Request",
         mailgenContent: forgotPasswordMailgenContent(
             user.username,
-            `${process.env.FORGOT_PASSWORD_REDIRECT_URL}/${unhashedToken}`,
+            `${process.env.FORGOT_PASSWORD_REDIRECT_URL}/${unHashedToken}`,
         ),
     })
     return res
